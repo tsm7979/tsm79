@@ -250,7 +250,6 @@ tsm run "Summarize key risks in this NDA"
 - Metrics export (Prometheus, StatsD, InfluxDB)
 - Distributed tracing
 
-[See full architecture →](100_PERCENT_STEP1_COMPLETE.md)
 
 ---
 
@@ -343,9 +342,6 @@ MIT License - see [LICENSE](LICENSE)
 
 ---
 
-## Security
-
-Found a vulnerability? Email: security@tsm-platform.com
 
 ---
 
@@ -353,7 +349,7 @@ Found a vulnerability? Email: security@tsm-platform.com
 
 - 🐛 **Issues**: [GitHub Issues](https://github.com/tsm7979/tsm/issues)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/tsm7979/tsm/discussions)
-- 🐦 **Twitter**: [@tsm_layer](https://twitter.com/tsm_layer)
+
 
 ---
 
@@ -370,8 +366,3 @@ Found a vulnerability? Email: security@tsm-platform.com
 
 **Try it:** `git clone https://github.com/tsm7979/tsm`
 
----
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=tsm7979/tsm&type=Date)](https://star-history.com/#tsm7979/tsm&Date)
