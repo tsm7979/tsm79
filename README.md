@@ -34,7 +34,7 @@ That's it. No API keys needed for the demo.
 
 ---
 
-## The Demo That Makes You Go "Holy Sh*t"
+## The Demo "
 
 Try this:
 
