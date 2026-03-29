@@ -1,4 +1,4 @@
-# Development artifacts
+# Development artifacts (not needed by users)
 *_MILESTONE*.md
 *_STATUS*.md
 *_REPORT*.md
@@ -8,25 +8,58 @@ SESSION_*.md
 FOCUS.md
 MIGRATION_GUIDE.md
 DEFENSE_GRADE_ROADMAP.md
-ARCHITECTURE.md
 TSM_LAYER_ARCHITECTURE.md
 WORKING_STATUS.md
+100_PERCENT_STEP1_COMPLETE.md
 
 # Test files
 test_*.py
-demo_full_pipeline.py
-demo_orchestrator.py
-fix_*.py
+tests/
 
 # Old versions
 *_OLD*.md
 *_BACKUP*.md
 QUICKSTART.md
 
-# Logs
+# Logs and data
 *.log
 *.jsonl
 trust_ledger.jsonl
+data/
+archive/
+
+# Unnecessary directories for CLI users
+analytics/
+caching/
+cli/
+config/
+connectors/
+database/
+db/
+deployment/
+docs/
+examples/
+graphql_api/
+identity/
+loadbalancer/
+messaging/
+metrics_export/
+monitoring/
+network/
+plugins/
+queue/
+rag/
+ratelimit/
+rbac/
+resilience/
+sdk/
+simulation/
+src/
+streaming/
+tenancy/
+tracing/
+web/
+webhooks/
 
 # Python
 __pycache__/
@@ -64,7 +97,3 @@ env/
 # OS
 .DS_Store
 Thumbs.db
-
-# Data directories
-data/
-archive/
