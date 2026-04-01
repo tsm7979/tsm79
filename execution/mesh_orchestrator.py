@@ -30,7 +30,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.core.llm.inference_manager import InferenceManager, get_inference_manager
+# from src.core.llm.inference_manager import InferenceManager, get_inference_manager
 from src.api.schemas.mesh import AgentRole, ConsensusStatus
 
 logger = logging.getLogger(__name__)

@@ -136,6 +136,10 @@ async def sanitize_input(prompt: str, detected_types: list) -> str:
     if 'phone' in detected_types:
         sanitized = re.sub(r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b', '[REDACTED_PHONE]', sanitized)
 
+    # Sanitize credit card
+    if 'credit_card' in detected_types:
+        sanitized = re.sub(r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b', '[REDACTED_CREDIT_CARD]', sanitized)
+
     # Sanitize personal identity
     if 'personal_identity' in detected_types:
         sanitized = re.sub(r'(my name is|i am|i\'m)\s+\w+', r'\1 [REDACTED]', sanitized, flags=re.IGNORECASE)

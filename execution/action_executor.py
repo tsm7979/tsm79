@@ -146,10 +146,10 @@ class ActionExecutor:
         }
 
         # Initialize Simulation Engine
-        from src.core.simulation.ghost_sim import GhostSimulation
-        from src.core.simulation.digital_twin import DigitalTwinManager
+        # from src.core.simulation.ghost_sim import GhostSimulation
+        # from src.core.simulation.digital_twin import DigitalTwinManager
         # Just for initialization, in real app this would be injected
-        self.simulation_engine = GhostSimulation(DigitalTwinManager())
+        self.simulation_engine = None  # Stub for now
     
     def register_handler(self, action_type: str, handler: Callable):
         """Register a custom action handler."""
@@ -697,8 +697,8 @@ class ActionExecutor:
     async def _handle_github_pr(self, action: Action) -> Dict[str, Any]:
         """Handle GitHub PR creation actions."""
         # 1. Lazy Import dependencies
-        from src.utils.config import settings
-        from src.integrations.github.client import get_github_client
+        # from src.utils.config import settings
+        # from src.integrations.github.client import get_github_client
         
         # 2. Extract Parameters
         # Target format: "org/repo"
