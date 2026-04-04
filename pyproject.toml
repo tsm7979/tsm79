@@ -1,43 +1,69 @@
 [project]
-name = "tsm-layer"
-version = "1.0.0"
-description = "AI Control Plane - Universal layer for AI execution, governance, and trust"
-authors = [{name = "TSM Team"}]
+name = "tsm-firewall"
+version = "2.0.0"
+description = "The AI Firewall — intercept every AI call, detect PII, redact it, route intelligently"
+authors = [{name = "TSM Team", email = "team@tsm.dev"}]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 license = {text = "MIT"}
-
-dependencies = [
-    "fastapi>=0.104.1",
-    "uvicorn[standard]>=0.24.0",
-    "pydantic>=2.5.0",
-    "httpx>=0.25.1",
-    "cryptography>=41.0.7",
+keywords = ["ai", "firewall", "pii", "security", "openai", "proxy", "llm"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Internet :: Proxy Servers",
 ]
+dependencies = []  # zero runtime dependencies — pure Python stdlib
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.3",
-    "pytest-asyncio>=0.21.1",
-    "black>=23.11.0",
-    "mypy>=1.7.1",
-    "ruff>=0.1.6",
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "black>=23.0",
+    "ruff>=0.1",
+]
+full = [
+    "fastapi>=0.104",
+    "uvicorn[standard]>=0.24",
+    "httpx>=0.25",
 ]
 
+[project.urls]
+Homepage   = "https://github.com/tsm7979/tsm79"
+Repository = "https://github.com/tsm7979/tsm79"
+Issues     = "https://github.com/tsm7979/tsm79/issues"
+
+[project.scripts]
+tsm = "tsm.cli.main:main"
+
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires      = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["tsm*"]
+
+[tool.setuptools.package-data]
+"tsm" = ["py.typed"]
+
 [tool.black]
-line-length = 100
-target-version = ['py310']
+line-length    = 100
+target-version = ["py38"]
 
 [tool.ruff]
-line-length = 100
-target-version = "py310"
+line-length    = 100
+target-version = "py38"
+select         = ["E", "F", "I", "UP"]
+ignore         = ["E501"]
 
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false
+[tool.pytest.ini_options]
+testpaths    = ["tests"]
+asyncio_mode = "auto"
