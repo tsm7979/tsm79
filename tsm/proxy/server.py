@@ -169,21 +169,24 @@ class TSMHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         if path in ("/v1/chat/completions", "/v1/completions"):
-            self._handle_completion()
+            # Read body first to check if stream=true
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                raw    = self.rfile.read(length)
+                body   = json.loads(raw)
+            except Exception:
+                self._error(400, "Invalid JSON body")
+                return
+            if body.get("stream"):
+                self._handle_stream(body)
+            else:
+                self._handle_completion(body)
         else:
             self._error(404, f"Endpoint not found: {path}")
 
     # ── Core logic ───────────────────────────────────────────
-    def _handle_completion(self) -> None:
+    def _handle_completion(self, body: Dict) -> None:
         t0 = time.time()
-
-        # Parse body
-        try:
-            length = int(self.headers.get("Content-Length", 0))
-            body   = json.loads(self.rfile.read(length))
-        except Exception:
-            self._error(400, "Invalid JSON body")
-            return
 
         model    = body.get("model", "gpt-3.5-turbo")
         messages = body.get("messages", [])
@@ -273,6 +276,113 @@ class TSMHandler(BaseHTTPRequestHandler):
 
         self._json(response)
 
+    def _handle_stream(self, body: Dict) -> None:
+        """
+        Streaming (SSE) path — stream=true requests.
+
+        The proxy:
+          1. Scans + redacts the prompt (same detection pipeline as non-stream)
+          2. Sends the TSM decision as the first SSE chunk
+          3. Emits the content word-by-word as subsequent SSE chunks
+          4. Closes with [DONE]
+
+        In production, step 3 would forward to the real API with stream=true
+        and pipe the SSE response back. This implementation generates a demo
+        response so the tool works with zero API keys while demonstrating
+        the full streaming interface.
+        """
+        import socket
+
+        t0    = time.time()
+        model = body.get("model", "gpt-3.5-turbo")
+        messages = body.get("messages", [])
+        prompt   = body.get("prompt", "")
+
+        content = prompt or " ".join(
+            m.get("content", "") for m in messages if m.get("role") == "user"
+        )
+
+        # ── Detection pipeline (same as non-stream) ───────────
+        result = _State.detector.scan(content)
+        sem    = _State.semantic.scan(content)
+        all_pii_types = list(result.types) + sem.types
+
+        if any(f.type == "JAILBREAK_ATTEMPT" for f in sem.findings):
+            self._error(400, "[TSM] Request blocked: prompt injection detected")
+            return
+
+        # Redact
+        clean_body = body
+        if not result.is_clean or not sem.is_clean:
+            clean_msgs = []
+            for m in messages:
+                if m.get("role") == "user":
+                    txt = _State.detector.redact(m.get("content", ""))
+                    txt = _State.semantic.redact(txt, sem)
+                    clean_msgs.append({**m, "content": txt})
+                else:
+                    clean_msgs.append(m)
+            clean_body = {**body, "messages": clean_msgs}
+
+        decision = route(result, model)
+
+        # ── Ledger ────────────────────────────────────────────
+        latency = (time.time() - t0) * 1000
+        if _State.ledger is not None:
+            tokens = len(json.dumps(body)) // 4
+            effective_sev = result.worst_severity
+            _State.ledger.log_intercept(
+                model=decision["model"],
+                pii_types=all_pii_types,
+                severity=effective_sev.value if effective_sev else "none",
+                routed_local=decision["is_local"],
+                redacted=not result.is_clean or not sem.is_clean,
+                latency_ms=latency,
+                prompt_tokens=tokens,
+            )
+        _State.stats.record(result, decision["is_local"])
+
+        # ── Build streaming reply ─────────────────────────────
+        cid = f"chatcmpl-tsm-stream-{int(time.time()*1000)}"
+        if decision["is_local"]:
+            reply = (
+                f"[TSM] Request kept local. "
+                f"Detected: {', '.join(all_pii_types) or 'none'}. "
+                f"Cloud never saw this data."
+            )
+        else:
+            reply = (
+                f"[TSM Demo] Forwarded to {decision['model']}. "
+                f"PII redacted: {', '.join(all_pii_types) or 'none'}."
+            )
+
+        # ── Send SSE response ─────────────────────────────────
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-TSM-Firewall", "active")
+        self.send_header("X-TSM-PII", ",".join(all_pii_types) or "none")
+        self.end_headers()
+
+        words = reply.split()
+        for i, word in enumerate(words):
+            chunk = {
+                "id": cid, "object": "chat.completion.chunk",
+                "created": int(time.time()), "model": decision["model"],
+                "choices": [{"index": 0, "delta": {"content": word + (" " if i < len(words)-1 else "")}, "finish_reason": None}],
+            }
+            self._sse(json.dumps(chunk))
+            time.sleep(0.015)  # simulate token-by-token pacing
+
+        # Final chunk with finish_reason
+        final = {
+            "id": cid, "object": "chat.completion.chunk",
+            "created": int(time.time()), "model": decision["model"],
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+        }
+        self._sse(json.dumps(final))
+        self._sse("[DONE]")
+
     def _build_response(
         self,
         body: Dict,
@@ -331,6 +441,15 @@ class TSMHandler(BaseHTTPRequestHandler):
         }
 
     # ── Helpers ──────────────────────────────────────────────
+    def _sse(self, data: str) -> None:
+        """Write one SSE event."""
+        try:
+            line = f"data: {data}\n\n".encode("utf-8")
+            self.wfile.write(line)
+            self.wfile.flush()
+        except Exception:
+            pass
+
     def _json(self, data: Dict) -> None:
         payload = json.dumps(data, indent=2).encode()
         self.send_response(200)

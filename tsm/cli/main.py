@@ -812,6 +812,98 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+# ─── cmd_audit ────────────────────────────────────────────────
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    """tsm audit search <term> — search the trust ledger."""
+    from tsm.core.ledger import TrustLedger
+    import pathlib, json
+
+    sub = getattr(args, "audit_action", "search")
+    ledger_path = pathlib.Path.home() / ".tsm" / "ledger.jsonl"
+
+    if sub == "verify":
+        ledger = TrustLedger(ledger_path)
+        valid, count = ledger.verify_chain()
+        _p()
+        _sep()
+        _p(f"{C.BOLD}{C.CYAN}  TSM Audit Chain Verification{C.RESET}")
+        _sep()
+        _p()
+        if valid:
+            _ok(f"Chain intact — {count} entries verified · SHA-256")
+        else:
+            _err(f"Chain FAILED at entry {count} — possible tampering")
+        _p()
+        _sep()
+        _p()
+        return 0 if valid else 1
+
+    # Default: search
+    query = getattr(args, "query", None) or ""
+    query_lower = query.lower()
+
+    if not ledger_path.exists():
+        _warn("No audit ledger found. Run: tsm enable")
+        return 1
+
+    _p()
+    _sep()
+    _p(f"{C.BOLD}{C.CYAN}  TSM Audit Search{C.RESET}"
+       + (f"  {C.DIM}'{query}'{C.RESET}" if query else "  (all entries)"))
+    _sep()
+    _p()
+
+    hits = 0
+    try:
+        with open(ledger_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                if entry.get("type") != "intercept":
+                    continue
+
+                # Match query against pii_types, model, severity, timestamp
+                entry_str = json.dumps(entry).lower()
+                if query_lower and query_lower not in entry_str:
+                    continue
+
+                hits += 1
+                ts      = entry.get("ts", "?")
+                model   = entry.get("model", "?")
+                pii     = entry.get("pii_types", [])
+                sev     = entry.get("severity", "none")
+                local   = entry.get("routed_local", False)
+                lat     = entry.get("latency_ms", 0)
+
+                sev_col = {
+                    "CRITICAL": C.RED, "HIGH": C.YELLOW,
+                    "MEDIUM": C.CYAN, "LOW": C.GRAY, "none": C.GREEN,
+                }.get(sev, C.GRAY)
+
+                route_str = f"{C.GREEN}local{C.RESET}" if local else f"{C.GRAY}cloud{C.RESET}"
+                pii_str   = f"{C.YELLOW}{', '.join(pii)}{C.RESET}" if pii else f"{C.GREEN}clean{C.RESET}"
+
+                _p(f"  {C.GRAY}{ts}{C.RESET}  {model:<20}  {sev_col}{sev:<10}{C.RESET}  "
+                   f"{pii_str}  →{route_str}  {C.GRAY}{lat}ms{C.RESET}")
+
+    except OSError as e:
+        _err(f"Cannot read ledger: {e}")
+        return 1
+
+    _p()
+    _p(f"  {C.GRAY}{hits} entr{'y' if hits == 1 else 'ies'} matched{C.RESET}")
+    _sep()
+    _p()
+    return 0
+
+
 # ─── cmd_report ───────────────────────────────────────────────
 
 def cmd_report(args: argparse.Namespace) -> int:
@@ -1255,6 +1347,12 @@ Common:
     sub.add_parser("status", help="Trust ledger + live analytics")
     sub.add_parser("report", help="Compliance report (GDPR, HIPAA, PCI-DSS, SOC2)")
 
+    ap  = sub.add_parser("audit", help="Search and verify the trust ledger")
+    asp = ap.add_subparsers(dest="audit_action", metavar="action")
+    av  = asp.add_parser("verify", help="Verify SHA-256 chain integrity")
+    aq  = asp.add_parser("search", help="Search ledger entries")
+    aq.add_argument("query", nargs="?", default="", help="search term (pii type, model, severity)")
+
     pp  = sub.add_parser("policy", help="View and configure the active policy")
     psp = pp.add_subparsers(dest="policy_action", metavar="action")
     psp.add_parser("show")
@@ -1290,6 +1388,7 @@ def main() -> None:
         "stop":    cmd_stop,
         "status":  cmd_status,
         "report":  cmd_report,
+        "audit":   cmd_audit,
         "policy":  cmd_policy,
         "skills":  cmd_skills,
         "test":    cmd_test,
