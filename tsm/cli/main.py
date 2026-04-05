@@ -98,41 +98,47 @@ def _post(host: str, port: int, prompt: str, model: str = "gpt-3.5-turbo") -> Op
 
 def _start_proxy_bg(host: str, port: int, skill: Optional[str] = None) -> bool:
     """
-    Start the proxy as a detached subprocess so it survives this process.
-    Falls back to a daemon thread when subprocess launch fails.
+    Start the proxy so it survives this process:
+      1. Detached subprocess (preferred — survives parent exit)
+      2. Daemon thread fallback (for tsm enable which stays alive anyway)
     Returns True once the proxy responds on /health.
     """
-    # --- Try subprocess first (survives process exit) ---
+    # --- Detached subprocess ---
     try:
-        cmd = [
-            sys.executable, "-c",
-            (
-                "import sys; sys.stdout.reconfigure(encoding='utf-8', errors='replace') "
-                "if hasattr(sys.stdout,'reconfigure') else None; "
-                f"from tsm.proxy.server import start; "
-                f"start(host={host!r}, port={port}, skill={skill!r}, blocking=True)"
-            ),
-        ]
-        kwargs: dict = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+        script = (
+            "import os, sys, io\n"
+            "sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')\n"
+            "sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')\n"
+            f"os.environ['TSM_HEADLESS'] = '1'\n"
+            f"from tsm.proxy.server import start\n"
+            f"start(host={host!r}, port={port}, skill={skill!r}, blocking=True)\n"
+        )
+        cmd = [sys.executable, "-c", script]
+        # Use a log file instead of DEVNULL so the proxy can write safely
+        log_path = pathlib.Path.home() / ".tsm" / "proxy.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file = open(log_path, "a", encoding="utf-8", errors="replace")
+
+        popen_kwargs: dict = {"stdout": log_file, "stderr": log_file}
         if sys.platform == "win32":
-            kwargs["creationflags"] = (
+            popen_kwargs["creationflags"] = (
                 subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
             )
         else:
-            kwargs["start_new_session"] = True
+            popen_kwargs["start_new_session"] = True
 
-        subprocess.Popen(cmd, **kwargs)
+        subprocess.Popen(cmd, **popen_kwargs)
     except Exception:
-        pass  # fall through to thread fallback
+        pass
 
-    # --- Wait up to 5 s for proxy to be ready ---
+    # Wait up to 5 s for proxy to answer
     deadline = time.time() + 5.0
     while time.time() < deadline:
         if _ping(host, port, 0.4):
             return True
         time.sleep(0.15)
 
-    # --- Thread fallback (stays alive while tsm enable runs) ---
+    # --- Thread fallback ---
     try:
         from tsm.proxy.server import start as _srv_start
         t = threading.Thread(
@@ -141,7 +147,7 @@ def _start_proxy_bg(host: str, port: int, skill: Optional[str] = None) -> bool:
             daemon=True,
         )
         t.start()
-        deadline2 = time.time() + 4.0
+        deadline2 = time.time() + 5.0
         while time.time() < deadline2:
             if _ping(host, port, 0.4):
                 return True

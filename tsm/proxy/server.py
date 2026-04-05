@@ -324,7 +324,9 @@ def start(host: str = "localhost", port: int = 8080, skill: str | None = None, b
     if skill:
         _State.skill = skill
 
-    log_server_start(host, port)
+    # Suppress banner in headless/daemon mode (stdout may not be a real terminal)
+    if not os.environ.get("TSM_HEADLESS"):
+        log_server_start(host, port)
 
     server = HTTPServer((host, port), TSMHandler)
     _server_instance = server
@@ -333,7 +335,7 @@ def start(host: str = "localhost", port: int = 8080, skill: str | None = None, b
         try:
             server.serve_forever()
         except KeyboardInterrupt:
-            print("\n\n  🛑  TSM proxy stopped.\n")
+            print("\n\n  TSM proxy stopped.\n")
             server.shutdown()
     else:
         _server_thread = threading.Thread(target=server.serve_forever, daemon=True)
