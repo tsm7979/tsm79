@@ -1,67 +1,52 @@
-# Development artifacts (not needed by users)
-*_MILESTONE*.md
-*_STATUS*.md
-SESSION_*.md
-FOCUS.md
-MIGRATION_GUIDE.md
-WORKING_STATUS.md
-100_PERCENT_STEP1_COMPLETE.md
-
-# Old versions
-*_OLD*.md
-README_OLD*.md
-*_backup.md
-
-# Demo/test helper scripts (not core functionality)
-demo_*.py
-fix_*.py
-bulk_generate*.py
-generate_*.py
-
-# Python
+# ─── Python build artifacts ───────────────────────────────────
 __pycache__/
 *.py[cod]
+*.pyc
+*.pyo
+*.pyd
 *$py.class
 *.so
-.Python
+*.egg
+*.egg-info/
+*.egg-link
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
+develop-eggs/
 .eggs/
 lib/
 lib64/
-parts/
 sdist/
-var/
 wheels/
-*.egg-info/
 .installed.cfg
-*.egg
 
-# Virtual environments
+# ─── Virtual environments ─────────────────────────────────────
 venv/
+.venv/
 ENV/
 env/
+.env
 
-# IDE
+# ─── Runtime data (generated at runtime, not source) ─────────
+tsm_audit.jsonl
+trust_ledger.jsonl
+*.jsonl
+.tsm/
+
+# ─── Generated code ───────────────────────────────────────────
+generated/
+internal/research/generated/
+
+# ─── IDE / OS ────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Data
+# ─── Logs / databases ─────────────────────────────────────────
+*.log
 *.db
 *.sqlite
-*.log
-data/
 logs/
-
-# Generated
-generated/

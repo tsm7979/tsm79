@@ -1,0 +1,6000 @@
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
+# Kubernetes deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-layer
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: gateway
+        image: tsm/gateway:latest
