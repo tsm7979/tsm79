@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from tsm.detectors.pii import PIIDetector, ScanResult, Severity
+from tsm.detectors.semantic import SemanticDetector
 from tsm.proxy.logger import (
     log_request_start, log_scan_result, log_redaction,
     log_route, log_sent, log_blocked, log_server_start,
@@ -122,12 +123,21 @@ def _make_ledger():
     except Exception:
         return None
 
+def _make_policy():
+    try:
+        from tsm.core.policy import PolicyEngine
+        return PolicyEngine()
+    except Exception:
+        return None
+
 
 class _State:
-    detector = PIIDetector()
-    stats    = Stats()
-    ledger   = _make_ledger()   # crypto-chained audit trail
-    skill    = None             # active skill name
+    detector  = PIIDetector()
+    semantic  = SemanticDetector()
+    stats     = Stats()
+    ledger    = _make_ledger()    # crypto-chained audit trail
+    policy    = _make_policy()    # configurable policy engine
+    skill     = None              # active skill name
 
 
 # ─────────────────────────────────────────────────────────────
@@ -186,25 +196,56 @@ class TSMHandler(BaseHTTPRequestHandler):
 
         log_request_start(model, content)
 
-        # PII scan
+        # ── Layer 1: Regex PII scan ───────────────────────────
         result = _State.detector.scan(content)
         log_scan_result(result)
 
-        # Redact if needed
+        # ── Layer 2: Semantic analysis (jailbreak, entropy, contextual PII)
+        sem = _State.semantic.scan(content)
+        # Merge semantic findings into the all_types list for routing/logging
+        all_pii_types = list(result.types) + sem.types
+        # Escalate severity if semantic found something worse
+        effective_severity = result.worst_severity
+        if sem.worst_severity is not None:
+            order = [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW]
+            sem_idx = order.index(sem.worst_severity) if sem.worst_severity in order else 99
+            cur_idx = order.index(effective_severity) if effective_severity in order else 99
+            if sem_idx < cur_idx:
+                effective_severity = sem.worst_severity
+
+        # Jailbreak = always block
+        if any(f.type == "JAILBREAK_ATTEMPT" for f in sem.findings):
+            latency = (time.time() - t0) * 1000
+            self._error(400, "[TSM] Request blocked: prompt injection detected")
+            log_blocked("jailbreak_attempt", latency)
+            _State.stats.requests_blocked += 1
+            return
+
+        # ── Layer 3: Redact ───────────────────────────────────
         clean_body = body
-        if not result.is_clean:
-            log_redaction(result.types)
-            clean_messages = [
-                {**m, "content": _State.detector.redact(m.get("content", ""))}
-                if m.get("role") == "user" else m
-                for m in messages
-            ]
+        if not result.is_clean or not sem.is_clean:
+            log_redaction(all_pii_types)
+            clean_messages = []
+            for m in messages:
+                if m.get("role") == "user":
+                    txt = _State.detector.redact(m.get("content", ""))
+                    txt = _State.semantic.redact(txt, sem)
+                    clean_messages.append({**m, "content": txt})
+                else:
+                    clean_messages.append(m)
             clean_body = {**body, "messages": clean_messages}
             if prompt:
-                clean_body["prompt"] = _State.detector.redact(prompt)
+                txt = _State.detector.redact(prompt)
+                clean_body["prompt"] = _State.semantic.redact(txt, sem)
 
-        # Route
+        # ── Layer 4: Route ────────────────────────────────────
         decision = route(result, model)
+        # Override to local if semantic escalated severity to CRITICAL
+        if effective_severity == Severity.CRITICAL and not decision["is_local"]:
+            decision = {
+                "model": "local", "is_local": True, "blocked": False,
+                "reason": f"semantic escalation ({', '.join(sem.types)})",
+            }
         log_route(decision["model"], decision["is_local"], decision["reason"])
 
         # Update stats
@@ -222,10 +263,10 @@ class TSMHandler(BaseHTTPRequestHandler):
             tokens = len(json.dumps(body)) // 4
             _State.ledger.log_intercept(
                 model=decision["model"],
-                pii_types=result.types,
-                severity=result.worst_severity.value if result.worst_severity else "none",
+                pii_types=all_pii_types,
+                severity=effective_severity.value if effective_severity else "none",
                 routed_local=decision["is_local"],
-                redacted=not result.is_clean,
+                redacted=not result.is_clean or not sem.is_clean,
                 latency_ms=latency,
                 prompt_tokens=tokens,
             )

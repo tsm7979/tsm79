@@ -721,6 +721,145 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+# ─── cmd_report ───────────────────────────────────────────────
+
+def cmd_report(args: argparse.Namespace) -> int:
+    """tsm report — compliance-ready summary from the trust ledger."""
+    from tsm.core.analytics import compute, load_intercepts
+    from tsm.core.ledger import TrustLedger
+    from tsm.core.policy import COMPLIANCE_MAP
+
+    stats = compute()
+    ledger = TrustLedger()
+    chain_ok, chain_count = ledger.verify_chain()
+
+    import time
+    date_str = time.strftime("%Y-%m-%d", time.gmtime())
+
+    _p()
+    _sep()
+    _p(f"{C.BOLD}{C.CYAN}  TSM Compliance Report — {date_str}{C.RESET}")
+    _sep()
+    _p()
+
+    total = stats["total"]
+    if total == 0:
+        _info("No data yet. Run: tsm enable")
+        return 0
+
+    _p(f"  {C.BOLD}Overview{C.RESET}")
+    _p(f"  Intercepted     {total} requests")
+    _p(f"  PII detected    {stats['redacted']}  ({int(stats['redacted']/total*100)}% of traffic)")
+    _p(f"  Routed local    {stats['local_routes']}  (cloud never received sensitive data)")
+    _p(f"  Cost saved      ${stats['cost_saved']:.4f}")
+    _p(f"  Avg latency     {stats['avg_latency_ms']}ms overhead")
+    _p()
+
+    # Compliance breakdown per framework
+    pii_types = stats.get("pii_types", {})
+    for framework, info in COMPLIANCE_MAP.items():
+        covered = {t: pii_types[t] for t in info["pii_types"] if t in pii_types}
+        if not covered:
+            continue
+        total_covered = sum(covered.values())
+        _p(f"  {C.BOLD}{framework}{C.RESET}  {C.GRAY}({info['article']}){C.RESET}")
+        for pii_type, count in covered.items():
+            _p(f"    {pii_type:<24} {count} events prevented")
+        _p(f"    {C.GRAY}Recommended action: {info['action']}{C.RESET}")
+        _p()
+
+    # Severity breakdown
+    sev = stats.get("severity_dist", {})
+    if sev:
+        _p(f"  {C.BOLD}Severity breakdown{C.RESET}")
+        for s_name in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "none"]:
+            if s_name in sev:
+                color = {
+                    "CRITICAL": C.RED, "HIGH": C.YELLOW,
+                    "MEDIUM": C.CYAN, "LOW": C.GRAY, "none": C.GREEN,
+                }.get(s_name, C.GRAY)
+                _p(f"    {color}{s_name:<12}{C.RESET}  {sev[s_name]}")
+        _p()
+
+    # Chain integrity
+    if chain_ok:
+        _p(f"  {C.GREEN}Audit chain verified{C.RESET}  {chain_count} entries · SHA-256 · tamper-evident")
+    else:
+        _p(f"  {C.RED}Audit chain FAILED{C.RESET}  integrity check failed at entry {chain_count}")
+    _p()
+    _sep()
+    _p()
+    return 0
+
+
+# ─── cmd_policy ───────────────────────────────────────────────
+
+def cmd_policy(args: argparse.Namespace) -> int:
+    """tsm policy — view and configure the active policy."""
+    from tsm.core.policy import PolicyEngine, COMPLIANCE_MAP
+
+    engine = PolicyEngine()
+    sub = getattr(args, "policy_action", "show")
+
+    if sub == "show" or sub is None:
+        data = engine.show()
+        _p()
+        _sep()
+        _p(f"{C.BOLD}{C.CYAN}  TSM Policy{C.RESET}")
+        _sep()
+        _p()
+        frameworks = data.get("compliance", [])
+        if frameworks:
+            _ok(f"Compliance frameworks: {', '.join(frameworks)}")
+        else:
+            _info("No compliance frameworks enabled. Try: tsm policy enable GDPR")
+        _p()
+        rules = data.get("rules", [])
+        if rules:
+            _p(f"  {C.BOLD}Custom rules ({len(rules)}){C.RESET}")
+            for r in rules:
+                col = C.RED if r.get("action") == "block" else C.YELLOW
+                _p(f"    {col}{r.get('action','?'):<8}{C.RESET}  {r.get('match')}  [{r.get('label','')}]")
+        else:
+            _p(f"  {C.GRAY}No custom rules. Add with: tsm policy add \"pattern\" block LABEL{C.RESET}")
+        _p()
+        blocklist = data.get("model_blocklist", [])
+        if blocklist:
+            _warn(f"Blocked models: {', '.join(blocklist)}")
+        _p(f"  {C.GRAY}require_local_for: {data.get('require_local_for', [])}{C.RESET}")
+        _p()
+        _sep()
+        _p()
+
+    elif sub == "enable":
+        framework = getattr(args, "framework", None)
+        if not framework:
+            _err("Usage: tsm policy enable GDPR|HIPAA|PCI-DSS|SOC2")
+            return 1
+        try:
+            engine.enable_compliance(framework)
+            _ok(f"Compliance framework enabled: {framework}")
+        except ValueError as e:
+            _err(str(e))
+            return 1
+
+    elif sub == "add":
+        match = getattr(args, "match", None)
+        action = getattr(args, "action", "block")
+        label = getattr(args, "label", match)
+        if not match:
+            _err("Usage: tsm policy add \"pattern\" block|redact|flag LABEL")
+            return 1
+        engine.add_rule(match, action, label)
+        _ok(f"Rule added: {action} '{match}' [{label}]")
+
+    elif sub == "reset":
+        engine.reset()
+        _ok("Policy reset to defaults")
+
+    return 0
+
+
 # ─── cmd_hook / cmd_run ────────────────────────────────────────
 
 _KNOWN_HOOKS = {
@@ -1021,7 +1160,16 @@ Common:
     stp.add_argument("--skill")
 
     sub.add_parser("stop",   help="Stop the proxy")
-    sub.add_parser("status", help="Live proxy stats")
+    sub.add_parser("status", help="Trust ledger + live analytics")
+    sub.add_parser("report", help="Compliance report (GDPR, HIPAA, PCI-DSS, SOC2)")
+
+    pp  = sub.add_parser("policy", help="View and configure the active policy")
+    psp = pp.add_subparsers(dest="policy_action", metavar="action")
+    psp.add_parser("show")
+    pe  = psp.add_parser("enable"); pe.add_argument("framework")
+    pa  = psp.add_parser("add")
+    pa.add_argument("match"); pa.add_argument("action"); pa.add_argument("label", nargs="?", default=None)
+    psp.add_parser("reset")
 
     skp = sub.add_parser("skills", help="Manage skill packs")
     sk  = skp.add_subparsers(dest="sub", metavar="action")
@@ -1048,6 +1196,8 @@ def main() -> None:
         "start":   cmd_start,
         "stop":    cmd_stop,
         "status":  cmd_status,
+        "report":  cmd_report,
+        "policy":  cmd_policy,
         "skills":  cmd_skills,
         "test":    cmd_test,
     }
@@ -1055,23 +1205,30 @@ def main() -> None:
     if args.cmd is None:
         _p()
         _sep()
-        _p(f"{C.BOLD}{C.CYAN}  🛡️  TSM — The AI Firewall{C.RESET}")
+        _p(f"{C.BOLD}{C.CYAN}  TSM — The AI Firewall{C.RESET}")
         _sep()
         _p()
-        _p(f"  Enterprise-grade AI data protection.")
-        _p(f"  Free. Local. No account. Works in 10 seconds.")
+        _p(f"  The default security layer for AI applications.")
+        _p(f"  Intercepts every AI call. Detects and redacts PII.")
+        _p(f"  Free. Local. Zero code changes. Works in 10 seconds.")
         _p()
         _p(f"  {C.BOLD}Start here:{C.RESET}")
         _p()
         _p(f"  {C.GREEN}tsm enable{C.RESET}              {C.DIM}start + see it work immediately{C.RESET}")
-        _p(f"  {C.GREEN}tsm demo{C.RESET}                {C.DIM}step-by-step (no LLM needed){C.RESET}")
+        _p(f"  {C.GREEN}tsm demo{C.RESET}                {C.DIM}step-by-step walkthrough{C.RESET}")
         _p()
-        _p(f"  {C.BOLD}Then use it:{C.RESET}")
+        _p(f"  {C.BOLD}Protect your tools:{C.RESET}")
         _p()
-        _p(f"  {C.GREEN}tsm hook claude{C.RESET}         {C.DIM}wrap claude{C.RESET}")
+        _p(f"  {C.GREEN}tsm hook claude{C.RESET}         {C.DIM}wrap claude CLI{C.RESET}")
         _p(f"  {C.GREEN}tsm hook codex{C.RESET}          {C.DIM}wrap codex{C.RESET}")
         _p(f"  {C.GREEN}tsm run python app.py{C.RESET}   {C.DIM}wrap any script{C.RESET}")
-        _p(f"  {C.GREEN}tsm scan \"text...\"  {C.RESET}    {C.DIM}instant PII scan{C.RESET}")
+        _p(f"  {C.GREEN}tsm scan \"text\"{C.RESET}         {C.DIM}instant PII scan{C.RESET}")
+        _p()
+        _p(f"  {C.BOLD}Understand what's happening:{C.RESET}")
+        _p()
+        _p(f"  {C.GREEN}tsm status{C.RESET}              {C.DIM}trust ledger + chain integrity{C.RESET}")
+        _p(f"  {C.GREEN}tsm report{C.RESET}              {C.DIM}compliance report (GDPR, HIPAA, SOC2){C.RESET}")
+        _p(f"  {C.GREEN}tsm policy{C.RESET}              {C.DIM}configure rules and frameworks{C.RESET}")
         _p()
         _p(f"  {C.DIM}tsm --help for all commands{C.RESET}")
         _p()
