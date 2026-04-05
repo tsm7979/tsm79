@@ -1,22 +1,24 @@
 # 🛡️ TSM — The AI Firewall
 
-**Enterprise-grade AI data protection. Free. Local. 10 seconds.**
-
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)](https://python.org)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Website](https://img.shields.io/badge/website-thesovereignmechanica.ai-purple)](https://thesovereignmechanica.ai/)
 
+I built this because I kept accidentally pasting API keys and emails into AI chat windows.
+
+Once you see your own SSN show up in a Claude prompt, you realize the problem is real and nothing out there actually solves it cheaply. So this is that — a firewall that intercepts every AI call you make, strips the sensitive stuff, and lets you watch it happen in real time.
+
 ---
 
-## ⚡ Enable in 10 seconds
+## Try it right now
 
 ```bash
 pip install tsm-firewall
 tsm enable
 ```
 
-**That's it.** You'll see this:
+You'll see this fire immediately in your terminal — no second window, no curl, nothing extra:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -24,202 +26,152 @@ tsm enable
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   ✓  Firewall started at http://localhost:8080
   ✓  PII detection active  (14 patterns, 4 severity tiers)
-  ✓  Audit log active      tsm_audit.jsonl
+  ✓  Audit log active
 
-  Your AI tools are now protected.  To hook your shell:
-
-  eval "$(tsm enable --eval)"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Sending test traffic — watch the firewall work:
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [TSM] → gpt-3.5-turbo  Help me file taxes. My SSN is 12…
-[TSM] 🚨 Detected: SSN  (123****)
+[TSM] 🚨 Detected: SSN
 [TSM] 🛡️  Redacted: SSN → [REDACTED:SSN]
 [TSM] 🔒 Routing → local model  cloud never sees it
 [TSM] ✓ Done  latency=2ms  cost=free (local)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [TSM] → gpt-4  Charge my Visa 4111 1111 1111 1111…
-[TSM] 🚨 Detected: CREDIT_CARD  (411***************)
-[TSM] 🛡️  Redacted: CREDIT_CARD → [REDACTED:CC]
+[TSM] 🚨 Detected: CREDIT_CARD
 [TSM] 🔒 Routing → local model  cloud never sees it
-[TSM] ✓ Done  latency=2ms  cost=free (local)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[TSM] → gpt-3.5-turbo  Email alice@company.com the Q1…
-[TSM] 🔍 Detected: EMAIL  (ali***)
+[TSM] → gpt-3.5-turbo  Email alice@company.com the report
+[TSM] 🔍 Detected: EMAIL
 [TSM] 🛡️  Redacted: EMAIL → [REDACTED:EMAIL]
-[TSM] ☁️  Routing → cloud  PII redacted
-[TSM] ✓ Done  latency=612ms  cost=~$0.00012
+[TSM] ☁️  Routing → cloud  (PII removed)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [TSM] → gpt-3.5-turbo  What is the capital of France?
-[TSM] ✓ Done  latency=720ms  cost=~$0.00008  (clean)
+[TSM] ✓ Done  clean — forwarded unchanged
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  ✓  Firewall active. Your AI is protected.
-
-  tsm hook claude          wrap claude
-  tsm hook codex           wrap codex
-  tsm run python app.py    wrap any script
-  tsm status               live stats
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Monitoring live...  (Ctrl+C to exit, proxy keeps running)
+  ✓  Firewall active. Monitoring live requests...
 ```
 
-Every real request your tools make will appear here in real time.
+That's it. From install to visible protection in under 30 seconds.
 
 ---
 
-## 🔌 Works with any AI tool. Zero code changes.
+## How it works
 
-```bash
-tsm hook claude             # run claude through TSM
-tsm hook codex              # run codex through TSM
-tsm run python my_script.py # run any script through TSM
-eval "$(tsm enable --eval)" # hook entire shell session
-```
+TSM runs a local HTTP proxy on `:8080` that speaks the OpenAI API format. You point your tools at it instead of OpenAI. It scans every prompt before it leaves your machine, redacts what it finds, and makes a routing decision:
 
-**Or one env var:**
-```bash
-export OPENAI_BASE_URL=http://localhost:8080
-# Everything using the OpenAI SDK is now intercepted.
-```
+- **CRITICAL PII** (SSN, credit card, private key) → routed to a local model. Cloud never touches it.
+- **HIGH PII** (API keys, passwords, JWT, AWS keys) → redacted, then forwarded to cloud.
+- **MEDIUM PII** (emails, phone numbers) → redacted, forwarded.
+- **Clean** → passes through unchanged.
+
+All of this happens in `~2ms` of overhead. You see every decision printed to your terminal in real time.
 
 ---
 
-## 🎮 Interactive demo (no LLM, no account needed)
+## Hooking into your existing tools
+
+This is the part that matters most. You don't change your code.
 
 ```bash
-tsm demo
+# Wrap a specific tool
+tsm hook claude           # runs claude with TSM intercepting everything
+tsm hook codex            # same for codex
+
+# Or protect your entire shell session
+eval "$(tsm enable --eval)"
+# Now every python script, node app, or CLI tool that calls an AI is protected
 ```
 
-Walk through 5 real request types — SSN, credit card, AWS key, email, clean — and see exactly what TSM does to each one.
+If you use the OpenAI Python SDK:
 
----
+```python
+import os
+os.environ["OPENAI_BASE_URL"] = "http://localhost:8080"
 
-## 🔴→🟢 Before vs After
-
-### Without TSM
-```bash
-# Your prompt goes directly to OpenAI
-"My SSN is 123-45-6789. Help me file taxes."
-# → OpenAI receives it. Logged. Compliance violation.
-```
-
-### With TSM (no code changes)
-```bash
-# Same prompt, same code, same tool
-"My SSN is 123-45-6789. Help me file taxes."
-# → TSM intercepts
-# → [TSM] 🚨 Detected: SSN
-# → [TSM] 🔒 Routing → local model
-# → OpenAI never sees it
-```
-
-**curl before/after:**
-
-```bash
-# BEFORE — data goes to cloud
-curl -X POST https://api.openai.com/v1/chat/completions \
-  -H "Authorization: Bearer $OPENAI_API_KEY" \
-  -d '{"model":"gpt-3.5-turbo","messages":[
-        {"role":"user","content":"My SSN is 123-45-6789"}]}'
-
-# AFTER — same curl, TSM intercepts
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -d '{"model":"gpt-3.5-turbo","messages":[
-        {"role":"user","content":"My SSN is 123-45-6789"}]}'
-```
-
-**Response:**
-```json
-{
-  "choices": [{"message": {"content": "🔒 [TSM] Processed locally — data not sent to cloud."}}],
-  "tsm": {
-    "firewall": "active",
-    "pii_detected": ["SSN"],
-    "severity": "CRITICAL",
-    "redacted": true,
-    "routed_local": true,
-    "latency_ms": 2.1
-  }
-}
+# Your existing code — completely unchanged
+from openai import OpenAI
+client = OpenAI()
+response = client.chat.completions.create(...)  # TSM intercepts this
 ```
 
 ---
 
-## 🔍 What Gets Detected
+## What gets caught
 
-| Severity   | Pattern Types                                   | Action                      |
-|------------|-------------------------------------------------|-----------------------------|
-| 🚨 CRITICAL | SSN, Credit Card, Private Key                   | Block from cloud entirely   |
-| ⚠️ HIGH     | AWS Key, API Key, Password, JWT, OpenAI Key     | Redact + terminal alert     |
-| 🔍 MEDIUM   | Email, Phone Number, Passport                   | Redact, allow cloud         |
-| ℹ️ LOW      | IP Address                                      | Log only                    |
+Tested against 8/8 pattern types through a live proxy:
 
-14 patterns. <1% false positives. ~2ms overhead.
+| What                        | Severity | What TSM does                     |
+|-----------------------------|----------|-----------------------------------|
+| Social Security Number       | CRITICAL | Blocks from cloud entirely         |
+| Credit card number           | CRITICAL | Blocks from cloud entirely         |
+| Private key / PEM file       | CRITICAL | Blocks from cloud entirely         |
+| AWS access key               | HIGH     | Strips it, forwards the rest       |
+| OpenAI / API key             | HIGH     | Strips it, forwards the rest       |
+| Password in prompt           | HIGH     | Strips it, forwards the rest       |
+| Email address                | MEDIUM   | Strips it, forwards the rest       |
+| Phone number                 | MEDIUM   | Strips it, forwards the rest       |
+| Clean prompt                 | —        | Passes through, no overhead        |
 
----
-
-## 🛠️ All Commands
-
-```
-tsm enable                    [START HERE] start + demo + monitor
-tsm demo                      step-by-step walkthrough
-tsm hook claude               wrap claude (auto-starts proxy)
-tsm hook codex                wrap codex (auto-starts proxy)
-tsm run python app.py         wrap any script (auto-starts proxy)
-eval "$(tsm enable --eval)"   hook entire shell session
-tsm scan "text..."            instant PII scan, no proxy needed
-tsm monitor                   live request stream
-tsm status                    proxy stats
-tsm start --daemon            start proxy in background
-tsm stop                      stop proxy
-tsm skills                    list skill packs
-tsm test                      self-test (8/8 pattern checks)
-```
+Every decision gets logged to `tsm_audit.jsonl` for compliance purposes.
 
 ---
 
-## ⚡ Skill Packs
+## Commands
+
+```
+tsm enable                    the main one — start + demo + live monitor
+tsm demo                      step through 5 request types interactively
+tsm scan "some text"          check text for PII without running the proxy
+tsm hook claude               wrap claude
+tsm hook codex                wrap codex
+tsm run python app.py         run any script through the firewall
+eval "$(tsm enable --eval)"   set env vars to protect your shell session
+tsm status                    see what's been intercepted so far
+tsm skills                    list behavior packs (claude, codex, secure-coding)
+tsm stop                      stop the proxy
+tsm test                      run the built-in detection test (8/8 checks)
+```
+
+---
+
+## Skill packs
+
+These are small markdown files that change how TSM handles specific tools.
 
 ```bash
-tsm skills                        # list packs
-tsm start --skill secure-coding   # OWASP checks on completions
-tsm start --skill claude          # optimized for claude sessions
+tsm start --skill secure-coding   # flags insecure patterns in AI completions
+tsm start --skill claude          # tweaked for claude sessions
+tsm start --skill codex           # tweaked for code completion workflows
 ```
 
 ---
 
-## 📊 What This Is
+## The honest pitch
 
-The free, open-source core of an enterprise AI security product.
+Companies charge $5k–$50k/year for products that do roughly what this does. Bedrock Guardrails, Nightfall, Private AI — they're all real products with real enterprise features (SOC 2, SSO, dashboards, Kubernetes). This repo isn't that.
 
-**Comparable enterprise tools:**
-- AWS Bedrock Guardrails — $0.75/1000 checks
-- Nightfall AI — $5k–$50k/year
-- Private AI — $20k+/year
+What this is: the core detection and routing engine, open source, running on your laptop, showing you exactly what those products are protecting against. If you're building AI into a product and you haven't thought about this yet, this is a good place to start.
 
-**TSM:** Free. Local. No account. Runs in 10 seconds.
-
-Use this repo to protect your own workflow today, and to understand what enterprise AI security actually does under the hood.
+The enterprise version of TSM is [thesovereignmechanica.ai](https://thesovereignmechanica.ai/). The repo is the free tier.
 
 ---
 
-## 📦 Install
+## Install
 
 ```bash
-# PyPI
+# from PyPI
 pip install tsm-firewall
 
-# Source
-git clone https://github.com/tsm7979/tsm79.git && cd tsm79 && pip install -e .
+# or from source
+git clone https://github.com/tsm7979/tsm79.git
+cd tsm79
+pip install -e .
 ```
 
-Zero runtime dependencies. Pure Python 3.8+.
+No dependencies outside the Python standard library. Python 3.8+.
 
 ---
 
-MIT License — **TSM. Protect your AI. Own your data.**
-
-[thesovereignmechanica.ai](https://thesovereignmechanica.ai/) · [github.com/tsm7979/tsm79](https://github.com/tsm7979/tsm79)
+MIT · [thesovereignmechanica.ai](https://thesovereignmechanica.ai/) · [github.com/tsm7979/tsm79](https://github.com/tsm7979/tsm79)

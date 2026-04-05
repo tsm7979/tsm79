@@ -97,22 +97,58 @@ def _post(host: str, port: int, prompt: str, model: str = "gpt-3.5-turbo") -> Op
 
 
 def _start_proxy_bg(host: str, port: int, skill: Optional[str] = None) -> bool:
-    """Start proxy in daemon thread. Return True when ready."""
+    """
+    Start the proxy as a detached subprocess so it survives this process.
+    Falls back to a daemon thread when subprocess launch fails.
+    Returns True once the proxy responds on /health.
+    """
+    # --- Try subprocess first (survives process exit) ---
     try:
-        from tsm.proxy.server import start
-    except ImportError:
-        return False
-    t = threading.Thread(
-        target=start,
-        kwargs={"host": host, "port": port, "skill": skill, "blocking": True},
-        daemon=True,
-    )
-    t.start()
-    deadline = time.time() + 4.0
+        cmd = [
+            sys.executable, "-c",
+            (
+                "import sys; sys.stdout.reconfigure(encoding='utf-8', errors='replace') "
+                "if hasattr(sys.stdout,'reconfigure') else None; "
+                f"from tsm.proxy.server import start; "
+                f"start(host={host!r}, port={port}, skill={skill!r}, blocking=True)"
+            ),
+        ]
+        kwargs: dict = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+        if sys.platform == "win32":
+            kwargs["creationflags"] = (
+                subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+            )
+        else:
+            kwargs["start_new_session"] = True
+
+        subprocess.Popen(cmd, **kwargs)
+    except Exception:
+        pass  # fall through to thread fallback
+
+    # --- Wait up to 5 s for proxy to be ready ---
+    deadline = time.time() + 5.0
     while time.time() < deadline:
         if _ping(host, port, 0.4):
             return True
-        time.sleep(0.1)
+        time.sleep(0.15)
+
+    # --- Thread fallback (stays alive while tsm enable runs) ---
+    try:
+        from tsm.proxy.server import start as _srv_start
+        t = threading.Thread(
+            target=_srv_start,
+            kwargs={"host": host, "port": port, "skill": skill, "blocking": True},
+            daemon=True,
+        )
+        t.start()
+        deadline2 = time.time() + 4.0
+        while time.time() < deadline2:
+            if _ping(host, port, 0.4):
+                return True
+            time.sleep(0.15)
+    except Exception:
+        pass
+
     return False
 
 
