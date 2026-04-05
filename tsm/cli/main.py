@@ -639,6 +639,97 @@ def cmd_stop(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_analyze(args: argparse.Namespace) -> int:
+    """tsm analyze — risk score, leak breakdown, behavioral profile."""
+    from tsm.core.analyze import RiskEngine
+    from tsm.core.analytics import spark_bar
+
+    engine = RiskEngine()
+    r = engine.run()
+
+    _p()
+    _sep()
+    _p(f"{C.BOLD}{C.CYAN}  TSM Risk Analysis{C.RESET}")
+    _sep()
+    _p()
+
+    if r.total_requests == 0:
+        _info("No data yet.")
+        _info("Run: tsm enable   then send some AI requests.")
+        _p()
+        return 0
+
+    # ── Risk score block ──────────────────────────────────────
+    grade_color = {
+        "CRITICAL": C.RED, "HIGH": C.RED, "ELEVATED": C.YELLOW,
+        "LOW": C.CYAN, "MINIMAL": C.GREEN,
+    }.get(r.grade, C.GRAY)
+
+    score_bar = spark_bar(int(r.risk_score), 100, width=30)
+    _p(f"  {C.BOLD}Risk Score{C.RESET}   {grade_color}{C.BOLD}{r.risk_score:5.1f} / 100{C.RESET}  "
+       f"{grade_color}{r.grade}{C.RESET}")
+    _p(f"  {C.GRAY}             [{score_bar}]{C.RESET}")
+    _p(f"  {C.GRAY}             {r.grade_message}{C.RESET}")
+    _p()
+
+    # ── Traffic summary ───────────────────────────────────────
+    s_pct  = int(r.sensitive_pct * 100)
+    pr_pct = int(r.prevented_pct * 100)
+    _p(f"  {C.GRAY}Intercepted   {C.RESET}{C.BOLD}{r.total_requests}{C.RESET} requests")
+    _p(f"  {C.GRAY}Sensitive     {C.RESET}"
+       f"{'%s%d%%%s' % (C.YELLOW if s_pct > 20 else C.GREEN, s_pct, C.RESET)} "
+       f"of prompts contained PII")
+    _p(f"  {C.GRAY}Prevented     {C.RESET}"
+       f"{'%s%d%%%s' % (C.GREEN if pr_pct > 80 else C.YELLOW, pr_pct, C.RESET)} "
+       f"of PII kept off cloud")
+    _p(f"  {C.GRAY}Cost saved    {C.RESET}{C.CYAN}${r.cost_saved:.4f}{C.RESET}")
+    _p()
+
+    # ── Leak breakdown ────────────────────────────────────────
+    if r.leaks:
+        _p(f"  {C.BOLD}Leak breakdown{C.RESET}   (sorted by risk impact)")
+        _p()
+        max_score = r.leaks[0].risk_score if r.leaks else 1
+        for leak in r.leaks:
+            bar     = spark_bar(int(leak.risk_score * 10), int(max_score * 10), width=18)
+            stopped = f"{C.GREEN}+{leak.prevented} stopped{C.RESET}" if leak.prevented else f"{C.YELLOW}none stopped{C.RESET}"
+            risk_col = C.RED if leak.risk_score >= 7 else C.YELLOW if leak.risk_score >= 4 else C.GRAY
+            _p(f"  {risk_col}{leak.pii_type:<22}{C.RESET}"
+               f"  [{bar}]  ×{leak.count}  {stopped}")
+        _p()
+
+    # ── Trend ─────────────────────────────────────────────────
+    trend_icon = {"IMPROVING": C.GREEN, "STABLE": C.CYAN,
+                  "WORSENING": C.RED, "INSUFFICIENT_DATA": C.GRAY}
+    t_col = trend_icon.get(r.trend, C.GRAY)
+    _p(f"  {C.BOLD}Trend{C.RESET}   {t_col}{r.trend}{C.RESET}  {C.GRAY}{r.trend_detail}{C.RESET}")
+    _p()
+
+    # ── Model exposure ────────────────────────────────────────
+    if r.models_exposed:
+        exposed_str = "  ".join(
+            f"{C.YELLOW}{m}{C.RESET}×{c}" for m, c in list(r.models_exposed.items())[:4]
+        )
+        _p(f"  {C.BOLD}Models that saw PII{C.RESET}   {exposed_str}")
+        _p()
+
+    # ── Recommendations ───────────────────────────────────────
+    _p(f"  {C.BOLD}Recommendations{C.RESET}")
+    for i, rec in enumerate(r.recommendations, 1):
+        _p(f"  {C.CYAN}{i}.{C.RESET} {rec}")
+    _p()
+
+    # ── Chain integrity footer ────────────────────────────────
+    if r.chain_valid:
+        _p(f"  {C.GRAY}Audit: {r.ledger_entries} entries · SHA-256 verified{C.RESET}")
+    else:
+        _warn(f"Audit chain integrity FAILED — ledger may be tampered")
+    _p()
+    _sep()
+    _p()
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     from tsm.core.analytics import compute, spark_bar
     from tsm.core.ledger import TrustLedger
@@ -1138,7 +1229,8 @@ Common:
 
     sub = p.add_subparsers(dest="cmd", metavar="command")
 
-    ep = sub.add_parser("enable",  help="[START HERE] start + visible magic + monitor")
+    sub.add_parser("analyze", help="[KEY FEATURE] risk score, leak breakdown, behavioral profile")
+    ep = sub.add_parser("enable",  help="Start firewall + see it work immediately")
     ep.add_argument("--eval", action="store_true")
 
     sub.add_parser("demo",    help="Step-by-step interactive demo")
@@ -1187,6 +1279,7 @@ def main() -> None:
     args = p.parse_args()
 
     dispatch = {
+        "analyze": cmd_analyze,
         "enable":  cmd_enable,
         "demo":    cmd_demo,
         "monitor": cmd_monitor,
@@ -1209,26 +1302,26 @@ def main() -> None:
         _sep()
         _p()
         _p(f"  The default security layer for AI applications.")
-        _p(f"  Intercepts every AI call. Detects and redacts PII.")
+        _p(f"  Intercepts every prompt. Detects PII. Prevents leaks.")
         _p(f"  Free. Local. Zero code changes. Works in 10 seconds.")
         _p()
-        _p(f"  {C.BOLD}Start here:{C.RESET}")
+        _p(f"  {C.BOLD}The golden path:{C.RESET}")
         _p()
-        _p(f"  {C.GREEN}tsm enable{C.RESET}              {C.DIM}start + see it work immediately{C.RESET}")
-        _p(f"  {C.GREEN}tsm demo{C.RESET}                {C.DIM}step-by-step walkthrough{C.RESET}")
+        _p(f"  {C.GREEN}tsm enable{C.RESET}              {C.DIM}start firewall + see it work{C.RESET}")
+        _p(f"  {C.GREEN}tsm analyze{C.RESET}             {C.BOLD}{C.CYAN}risk score · leak breakdown · recommendations{C.RESET}")
         _p()
-        _p(f"  {C.BOLD}Protect your tools:{C.RESET}")
+        _p(f"  {C.BOLD}Protect specific tools:{C.RESET}")
         _p()
         _p(f"  {C.GREEN}tsm hook claude{C.RESET}         {C.DIM}wrap claude CLI{C.RESET}")
         _p(f"  {C.GREEN}tsm hook codex{C.RESET}          {C.DIM}wrap codex{C.RESET}")
         _p(f"  {C.GREEN}tsm run python app.py{C.RESET}   {C.DIM}wrap any script{C.RESET}")
-        _p(f"  {C.GREEN}tsm scan \"text\"{C.RESET}         {C.DIM}instant PII scan{C.RESET}")
+        _p(f"  {C.GREEN}tsm scan \"text\"{C.RESET}         {C.DIM}instant PII scan (no proxy){C.RESET}")
         _p()
-        _p(f"  {C.BOLD}Understand what's happening:{C.RESET}")
+        _p(f"  {C.BOLD}Compliance and audit:{C.RESET}")
         _p()
-        _p(f"  {C.GREEN}tsm status{C.RESET}              {C.DIM}trust ledger + chain integrity{C.RESET}")
-        _p(f"  {C.GREEN}tsm report{C.RESET}              {C.DIM}compliance report (GDPR, HIPAA, SOC2){C.RESET}")
-        _p(f"  {C.GREEN}tsm policy{C.RESET}              {C.DIM}configure rules and frameworks{C.RESET}")
+        _p(f"  {C.GREEN}tsm report{C.RESET}              {C.DIM}GDPR / HIPAA / PCI-DSS / SOC2 mapping{C.RESET}")
+        _p(f"  {C.GREEN}tsm policy{C.RESET}              {C.DIM}configure custom rules{C.RESET}")
+        _p(f"  {C.GREEN}tsm status{C.RESET}              {C.DIM}live stats + chain integrity{C.RESET}")
         _p()
         _p(f"  {C.DIM}tsm --help for all commands{C.RESET}")
         _p()
