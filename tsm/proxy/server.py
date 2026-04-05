@@ -350,3 +350,13 @@ def stop() -> None:
 
 def is_running() -> bool:
     return _server_instance is not None
+
+
+if __name__ == "__main__":
+    import argparse as _ap
+    p = _ap.ArgumentParser(prog="tsm-proxy")
+    p.add_argument("--host", default="localhost")
+    p.add_argument("--port", default=8080, type=int)
+    p.add_argument("--skill", default=None)
+    a = p.parse_args()
+    start(host=a.host, port=a.port, skill=a.skill, blocking=True)
