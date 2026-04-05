@@ -640,35 +640,81 @@ def cmd_stop(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
+    from tsm.core.analytics import compute, spark_bar
+    from tsm.core.ledger import TrustLedger
+
     host, port = args.host, args.port
-    if not _ping(host, port):
-        _p()
-        _warn(f"Proxy not running")
-        _info(f"Start with: {C.BOLD}tsm enable{C.RESET}")
-        _p()
-        return 1
-    data = _stats(host, port) or {}
+    is_running = _ping(host, port)
+
+    stats = compute()          # reads ~/.tsm/ledger.jsonl
+    ledger = TrustLedger()
+    chain_ok, chain_count = ledger.verify_chain()
+
     _p()
     _sep()
-    _p(f"{C.BOLD}{C.CYAN}  🛡️  TSM Status{C.RESET}")
+    _p(f"{C.BOLD}{C.CYAN}  TSM — Trust Ledger{C.RESET}")
     _sep()
-    _ok(f"{_url(host, port)}  {C.GREEN}running{C.RESET}")
+
+    # Proxy status line
+    if is_running:
+        live_data = _stats(host, port) or {}
+        u = live_data.get("uptime_seconds", 0)
+        h, r = divmod(u, 3600); m, s = divmod(r, 60)
+        _ok(f"Proxy  {C.GREEN}running{C.RESET}  {_url(host, port)}  uptime {h:02d}:{m:02d}:{s:02d}")
+    else:
+        _warn(f"Proxy not running — showing historical data  ({C.DIM}tsm enable to start{C.RESET})")
+
     _p()
-    u = data.get("uptime_seconds", 0)
-    h, r = divmod(u, 3600); m, s = divmod(r, 60)
-    for label, val in [
-        ("Uptime",     f"{h:02d}:{m:02d}:{s:02d}"),
-        ("Total",      str(data.get("requests_total", 0))),
-        ("Clean",      f"{C.GREEN}{data.get('requests_clean', 0)}{C.RESET}"),
-        ("Redacted",   f"{C.YELLOW}{data.get('requests_redacted', 0)}{C.RESET}"),
-        ("Blocked",    f"{C.RED}{data.get('requests_blocked', 0)}{C.RESET}"),
-        ("Saved",      f"{C.CYAN}${data.get('cost_saved_usd', 0):.4f}{C.RESET}"),
-    ]:
-        _p(f"  {C.GRAY}{label:<10}{C.RESET}  {val}")
-    pii = data.get("pii_types_detected", {})
+
+    total = stats["total"]
+    if total == 0:
+        _info("No interceptions recorded yet. Run: tsm enable")
+        _p()
+        _sep()
+        _p()
+        return 0
+
+    # ── Summary row ───────────────────────────────────────────
+    local_pct = int(stats["local_ratio"] * 100)
+    _p(f"  {C.GRAY}Intercepted{C.RESET}   {C.BOLD}{total}{C.RESET}  requests")
+    _p(f"  {C.GRAY}PII blocked{C.RESET}   {C.YELLOW}{stats['redacted']}{C.RESET}  "
+       f"({C.YELLOW}{int(stats['redacted']/total*100) if total else 0}%{C.RESET})")
+    _p(f"  {C.GRAY}Routed local{C.RESET}  {C.GREEN}{stats['local_routes']}{C.RESET}  "
+       f"({C.GREEN}{local_pct}%{C.RESET}  cloud never saw it)")
+    _p(f"  {C.GRAY}Cost saved{C.RESET}    {C.CYAN}${stats['cost_saved']:.4f}{C.RESET}  "
+       f"avg latency {stats['avg_latency_ms']}ms")
+    _p()
+
+    # ── PII breakdown with bars ───────────────────────────────
+    pii = stats["pii_types"]
     if pii:
-        _p(f"  {C.GRAY}PII seen  {C.RESET}  " +
-           "  ".join(f"{C.YELLOW}{k}×{v}{C.RESET}" for k, v in pii.items()))
+        _p(f"  {C.BOLD}Detection breakdown{C.RESET}")
+        max_v = max(pii.values())
+        for typ, cnt in pii.items():
+            bar = spark_bar(cnt, max_v, width=16)
+            color = C.RED if typ in ("SSN", "CREDIT_CARD", "PRIVATE_KEY") else C.YELLOW
+            _p(f"  {color}{typ:<18}{C.RESET}  {bar}  {cnt}")
+        _p()
+
+    # ── Severity distribution ─────────────────────────────────
+    sev = stats["severity_dist"]
+    if sev:
+        sev_colors = {"CRITICAL": C.RED, "HIGH": C.YELLOW, "MEDIUM": C.CYAN, "LOW": C.GRAY, "none": C.GREEN}
+        parts = []
+        for s_name, cnt in sorted(sev.items(), key=lambda x: ["CRITICAL","HIGH","MEDIUM","LOW","none"].index(x[0]) if x[0] in ["CRITICAL","HIGH","MEDIUM","LOW","none"] else 99):
+            col = sev_colors.get(s_name, C.GRAY)
+            parts.append(f"{col}{s_name}{C.RESET} ×{cnt}")
+        _p(f"  {C.BOLD}Severity{C.RESET}   " + "  ".join(parts))
+        _p()
+
+    # ── Chain integrity ───────────────────────────────────────
+    if chain_ok:
+        _p(f"  {C.GREEN}Chain integrity  verified{C.RESET}  "
+           f"{C.GRAY}{chain_count} entries · SHA-256{C.RESET}")
+    else:
+        _p(f"  {C.RED}Chain integrity  FAILED{C.RESET}  "
+           f"{C.GRAY}checked {chain_count} entries{C.RESET}")
+
     _p()
     _sep()
     _p()

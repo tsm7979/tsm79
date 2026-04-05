@@ -111,27 +111,23 @@ class Stats:
 # Audit logger
 # ─────────────────────────────────────────────────────────────
 
-class AuditLog:
-    def __init__(self, path: str = "tsm_audit.jsonl"):
-        self.path = path
-
-    def write(self, entry: Dict[str, Any]) -> None:
-        try:
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({**entry, "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}) + "\n")
-        except Exception:
-            pass
-
-
 # ─────────────────────────────────────────────────────────────
 # Shared server state (set on class before serving)
 # ─────────────────────────────────────────────────────────────
 
+def _make_ledger():
+    try:
+        from tsm.core.ledger import TrustLedger
+        return TrustLedger()
+    except Exception:
+        return None
+
+
 class _State:
     detector = PIIDetector()
     stats    = Stats()
-    audit    = AuditLog()
-    skill    = None   # active skill name
+    ledger   = _make_ledger()   # crypto-chained audit trail
+    skill    = None             # active skill name
 
 
 # ─────────────────────────────────────────────────────────────
@@ -221,15 +217,18 @@ class TSMHandler(BaseHTTPRequestHandler):
         log_sent(decision["model"], latency, response.get("_cost", 0))
         response.pop("_cost", None)
 
-        # Audit
-        _State.audit.write({
-            "model_requested": model,
-            "model_used":      decision["model"],
-            "pii_detected":    result.types,
-            "redacted":        not result.is_clean,
-            "routed_local":    decision["is_local"],
-            "latency_ms":      round(latency, 1),
-        })
+        # Audit — write to crypto-chained trust ledger
+        if _State.ledger is not None:
+            tokens = len(json.dumps(body)) // 4
+            _State.ledger.log_intercept(
+                model=decision["model"],
+                pii_types=result.types,
+                severity=result.worst_severity.value if result.worst_severity else "none",
+                routed_local=decision["is_local"],
+                redacted=not result.is_clean,
+                latency_ms=latency,
+                prompt_tokens=tokens,
+            )
 
         self._json(response)
 
