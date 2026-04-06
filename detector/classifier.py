@@ -96,12 +96,23 @@ _PATTERNS: list[tuple[str, str, re.Pattern, Any]] = [
 
     # PII — HIGH
     ("SSN",             "high",     re.compile(r'\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b'), None),
-    ("CREDIT_CARD",     "high",     re.compile(r'\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9][0-9])[0-9]{12})\b'), luhn_valid),
+    # CC: allow optional spaces/dashes between groups (Luhn validates after stripping)
+    ("CREDIT_CARD",     "high",     re.compile(
+        r'(?<!\d)'
+        r'(?:'
+        r'4\d{3}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}'      # Visa 16
+        r'|5[1-5]\d{2}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}' # MC 16
+        r'|3[47]\d{2}[\s\-]?\d{6}[\s\-]?\d{5}'               # Amex 15
+        r'|6(?:011|5\d{2})[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}' # Discover
+        r')'
+        r'(?!\d)'
+    ), luhn_valid),
     ("PASSPORT",        "high",     re.compile(r'\b[A-Z]{1,2}[0-9]{6,9}\b'), None),
 
     # MEDIUM
     ("EMAIL",           "medium",   re.compile(r'\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b'), None),
-    ("PHONE",           "medium",   re.compile(r'\b(?:\+?1[-.\s]?)?(?:\([0-9]{3}\)|[0-9]{3})[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b'), None),
+    # Phone: use lookaround instead of \b so parenthesised formats match
+    ("PHONE",           "medium",   re.compile(r'(?<!\d)(?:\+?1[\s.\-]?)?(?:\(\d{3}\)|\d{3})[\s.\-]?\d{3}[\s.\-]?\d{4}(?!\d)'), None),
     ("IP_ADDRESS",      "medium",   re.compile(r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b'), None),
 
     # LOW / informational

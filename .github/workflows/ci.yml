@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+          pip install fastapi uvicorn pydantic pytest pytest-asyncio
+
+      - name: Run unit tests (classifier + policy)
+        run: pytest tests/test_classifier.py tests/test_policy_engine.py -v
+
+      - name: Run integration tests (proxy)
+        run: pytest tests/test_proxy_integration.py -v
+        timeout-minutes: 3
+
+  test-typescript:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: proxy/package-lock.json
+
+      - name: Install proxy dependencies
+        run: cd proxy && npm ci
+
+      - name: TypeScript typecheck
+        run: cd proxy && npx tsc --noEmit
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint
+        run: ruff check tsm/ detector/ --select E,F,I --ignore E501

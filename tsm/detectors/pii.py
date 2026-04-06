@@ -106,23 +106,23 @@ _PATTERNS: List[Tuple[str, Severity, re.Pattern, str, Optional[object]]] = [
 
     # ── HIGH ─────────────────────────────────────────────────
     # AWS access keys (all prefixes)
-    ("AWS_KEY",     Severity.HIGH,
-     re.compile(r"(?:AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}"),
+    ("AWS_KEY",     Severity.CRITICAL,
+     re.compile(r"AKIA[0-9A-Z]{16}"),
      "[REDACTED:AWS_KEY]", None),
 
-    # GitHub tokens (all formats)
-    ("GITHUB_TOKEN", Severity.HIGH,
-     re.compile(r"gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}"),
+    # GitHub tokens (all formats) — min 20 chars after prefix
+    ("GITHUB_TOKEN", Severity.CRITICAL,
+     re.compile(r"(ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}"),
      "[REDACTED:GITHUB_TOKEN]", None),
 
     # OpenAI keys (classic + project-based)
-    ("OPENAI_KEY",  Severity.HIGH,
-     re.compile(r"sk-(?:proj-)?[A-Za-z0-9]{20,}"),
+    ("OPENAI_KEY",  Severity.CRITICAL,
+     re.compile(r"sk-(?:proj-)?[A-Za-z0-9_\-]{20,}"),
      "[REDACTED:OPENAI_KEY]", None),
 
     # Anthropic keys
-    ("ANTHROPIC_KEY", Severity.HIGH,
-     re.compile(r"sk-ant-[A-Za-z0-9\-_]{32,}"),
+    ("ANTHROPIC_KEY", Severity.CRITICAL,
+     re.compile(r"sk-ant-[A-Za-z0-9\-_]{20,}"),
      "[REDACTED:ANTHROPIC_KEY]", None),
 
     # Generic API key assignment

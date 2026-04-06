@@ -1,177 +1,212 @@
-# 🛡️ TSM — The AI Firewall
+# TSM — The AI Firewall
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)](https://python.org)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)](pyproject.toml)
+[![CI](https://github.com/tsm7979/tsm79/actions/workflows/ci.yml/badge.svg)](https://github.com/tsm7979/tsm79/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/tsm-firewall)](https://pypi.org/project/tsm-firewall/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Website](https://img.shields.io/badge/website-thesovereignmechanica.ai-purple)](https://thesovereignmechanica.ai/)
 
-I built this because I kept accidentally pasting API keys and emails into AI chat windows.
-
-Once you see your own SSN show up in a Claude prompt, you realize the problem is real and nothing out there actually solves it cheaply. So this is that — a firewall that intercepts every AI call you make, strips the sensitive stuff, and lets you watch it happen in real time.
+Every prompt your app sends to an AI goes through TSM first. It scans for PII and secrets, redacts them, routes sensitive requests to a local model, and logs everything to a tamper-evident audit trail — without you changing a single line of application code.
 
 ---
 
-## Try it right now
+## Install and run
 
 ```bash
 pip install tsm-firewall
 tsm enable
 ```
 
-You'll see this fire immediately in your terminal — no second window, no curl, nothing extra:
+You'll see this immediately:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🛡️  TSM — The AI Firewall
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ✓  Firewall started at http://localhost:8080
-  ✓  PII detection active  (14 patterns, 4 severity tiers)
-  ✓  Audit log active
-
-  Sending test traffic — watch the firewall work:
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[TSM] → gpt-3.5-turbo  Help me file taxes. My SSN is 12…
+[TSM] → gpt-3.5-turbo  My SSN is 123-45-6789. Help me file taxes.
 [TSM] 🚨 Detected: SSN
-[TSM] 🛡️  Redacted: SSN → [REDACTED:SSN]
-[TSM] 🔒 Routing → local model  cloud never sees it
-[TSM] ✓ Done  latency=2ms  cost=free (local)
+[TSM] 🛡  Redacted: SSN → [REDACTED]
+[TSM] 🔒 Routing → local model  (cloud never saw this)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[TSM] → gpt-4  Charge my Visa 4111 1111 1111 1111…
-[TSM] 🚨 Detected: CREDIT_CARD
-[TSM] 🔒 Routing → local model  cloud never sees it
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[TSM] → gpt-3.5-turbo  Email alice@company.com the report
-[TSM] 🔍 Detected: EMAIL
-[TSM] 🛡️  Redacted: EMAIL → [REDACTED:EMAIL]
-[TSM] ☁️  Routing → cloud  (PII removed)
+[TSM] → gpt-4  Token: ghp_abc123realrealrealrealtoken
+[TSM] 🚨 Detected: GITHUB_TOKEN  severity=critical
+[TSM] BLOCKED — secret never left your machine
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [TSM] → gpt-3.5-turbo  What is the capital of France?
-[TSM] ✓ Done  clean — forwarded unchanged
+[TSM] ✓ Clean — forwarded unchanged
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  ✓  Firewall active. Monitoring live requests...
 ```
-
-That's it. From install to visible protection in under 30 seconds.
 
 ---
 
-## How it works
+## Zero code changes
 
-TSM runs a local HTTP proxy on `:8080` that speaks the OpenAI API format. You point your tools at it instead of OpenAI. It scans every prompt before it leaves your machine, redacts what it finds, and makes a routing decision:
-
-- **CRITICAL PII** (SSN, credit card, private key) → routed to a local model. Cloud never touches it.
-- **HIGH PII** (API keys, passwords, JWT, AWS keys) → redacted, then forwarded to cloud.
-- **MEDIUM PII** (emails, phone numbers) → redacted, forwarded.
-- **Clean** → passes through unchanged.
-
-All of this happens in `~2ms` of overhead. You see every decision printed to your terminal in real time.
-
----
-
-## Hooking into your existing tools
-
-This is the part that matters most. You don't change your code.
-
-```bash
-# Wrap a specific tool
-tsm hook claude           # runs claude with TSM intercepting everything
-tsm hook codex            # same for codex
-
-# Or protect your entire shell session
-eval "$(tsm enable --eval)"
-# Now every python script, node app, or CLI tool that calls an AI is protected
-```
-
-If you use the OpenAI Python SDK:
+Point your existing OpenAI SDK at TSM. Nothing else changes.
 
 ```python
-import os
-os.environ["OPENAI_BASE_URL"] = "http://localhost:8080"
-
-# Your existing code — completely unchanged
-from openai import OpenAI
+# Before
 client = OpenAI()
-response = client.chat.completions.create(...)  # TSM intercepts this
+
+# After TSM (run `tsm enable` first)
+client = OpenAI(base_url="http://localhost:8080")
 ```
 
----
-
-## What gets caught
-
-Tested against 8/8 pattern types through a live proxy:
-
-| What                        | Severity | What TSM does                     |
-|-----------------------------|----------|-----------------------------------|
-| Social Security Number       | CRITICAL | Blocks from cloud entirely         |
-| Credit card number           | CRITICAL | Blocks from cloud entirely         |
-| Private key / PEM file       | CRITICAL | Blocks from cloud entirely         |
-| AWS access key               | HIGH     | Strips it, forwards the rest       |
-| OpenAI / API key             | HIGH     | Strips it, forwards the rest       |
-| Password in prompt           | HIGH     | Strips it, forwards the rest       |
-| Email address                | MEDIUM   | Strips it, forwards the rest       |
-| Phone number                 | MEDIUM   | Strips it, forwards the rest       |
-| Clean prompt                 | —        | Passes through, no overhead        |
-
-Every decision gets logged to `tsm_audit.jsonl` for compliance purposes.
-
----
-
-## Commands
-
-```
-tsm enable                    the main one — start + demo + live monitor
-tsm demo                      step through 5 request types interactively
-tsm scan "some text"          check text for PII without running the proxy
-tsm hook claude               wrap claude
-tsm hook codex                wrap codex
-tsm run python app.py         run any script through the firewall
-eval "$(tsm enable --eval)"   set env vars to protect your shell session
-tsm status                    see what's been intercepted so far
-tsm skills                    list behavior packs (claude, codex, secure-coding)
-tsm stop                      stop the proxy
-tsm test                      run the built-in detection test (8/8 checks)
-```
-
----
-
-## Skill packs
-
-These are small markdown files that change how TSM handles specific tools.
+Or set an environment variable and don't touch the code at all:
 
 ```bash
-tsm start --skill secure-coding   # flags insecure patterns in AI completions
-tsm start --skill claude          # tweaked for claude sessions
-tsm start --skill codex           # tweaked for code completion workflows
+export OPENAI_BASE_URL=http://localhost:8080
+python your_existing_app.py   # unchanged
 ```
 
 ---
 
-## The honest pitch
+## What it detects
 
-Companies charge $5k–$50k/year for products that do roughly what this does. Bedrock Guardrails, Nightfall, Private AI — they're all real products with real enterprise features (SOC 2, SSO, dashboards, Kubernetes). This repo isn't that.
+| Type | Method | Severity |
+|---|---|---|
+| GitHub / OpenAI / Anthropic / AWS / Stripe keys | Known prefix + min-length | Critical |
+| Private keys, JWTs | Structural parsing | Critical |
+| SSN, Credit cards | Regex + Luhn algorithm | High |
+| High-entropy secrets | Shannon entropy (>=4.5 bits/char) | High |
+| Email, phone, IP | Regex + context negation | Medium |
+| Jailbreak attempts | Pattern matching, 8 variants | Critical — blocked |
+| Ambiguous PII | LLM-assisted classification | Varies |
 
-What this is: the core detection and routing engine, open source, running on your laptop, showing you exactly what those products are protecting against. If you're building AI into a product and you haven't thought about this yet, this is a good place to start.
-
-The enterprise version of TSM is [thesovereignmechanica.ai](https://thesovereignmechanica.ai/). The repo is the free tier.
+Context negation suppresses false positives: `"fake SSN 123-45-6789"` is not flagged.
 
 ---
 
-## Install
+## Architecture
+
+Three services. Each in the right language for the job.
+
+```
+Your App
+   |
+   v
+proxy/          TypeScript (Node.js)   — production HTTP proxy, SSE, concurrent streams
+   |
+   v
+detector/       Python (FastAPI)        — detection pipeline, policy engine, LLM-assist
+   |
+   v
+Upstream AI     OpenAI / Anthropic / Ollama (local)
+```
+
+```
+dashboard/      Next.js                — live observability UI at localhost:3001
+```
+
+### Detection pipeline (4 stages, in order)
+
+```
+1. Regex + context negation    ~0ms     SSN, CC, keys, PII — false positives suppressed
+2. Shannon entropy analysis    ~0ms     obfuscated secrets, high-entropy tokens
+3. Structural parsing          ~0ms     JWTs, base64 blobs, API key formats
+4. LLM-assisted classification ~300ms   ambiguous cases only (names+DOB, medical context)
+```
+
+### Policy engine
+
+Replaces hardcoded if/else with a declarable rule DSL. Rules live in `~/.tsm/policy.json` and are editable at runtime via the API.
+
+```json
+{ "rules": [
+  { "name": "block_secrets",   "condition": { "any_of": ["GITHUB_TOKEN", "OPENAI_KEY"] }, "action": "block",       "priority": 2  },
+  { "name": "dev_redact_pii",  "condition": { "contains_pii": true, "user_role": "dev"  }, "action": "redact",      "priority": 10 },
+  { "name": "high_risk_local", "condition": { "risk_score_gte": 70                       }, "action": "route_local", "priority": 20 }
+]}
+```
+
+Add a rule without restarting:
 
 ```bash
-# from PyPI
-pip install tsm-firewall
-
-# or from source
-git clone https://github.com/tsm7979/tsm79.git
-cd tsm79
-pip install -e .
+curl -X POST http://localhost:8001/rules \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my_rule","condition":{"any_of":["EMAIL"]},"action":"redact","priority":15}'
 ```
-
-No dependencies outside the Python standard library. Python 3.8+.
 
 ---
 
-MIT · [thesovereignmechanica.ai](https://thesovereignmechanica.ai/) · [github.com/tsm7979/tsm79](https://github.com/tsm7979/tsm79)
+## Full stack
+
+```bash
+# Option A — full stack (proxy + detector + dashboard)
+bash start-all.sh
+
+# Option B — CLI only (Python proxy, zero Node.js required)
+tsm enable
+```
+
+| Service | Port | What it does |
+|---|---|---|
+| Proxy | 8080 | AI traffic intercept (TypeScript) |
+| Detector | 8001 | Detection + policy API (Python) |
+| Dashboard | 3001 | Live observability UI (Next.js) |
+
+---
+
+## Observability
+
+```bash
+tsm analyze              # risk score + PII breakdown
+tsm audit search SSN     # query tamper-evident audit ledger
+tsm audit verify         # check chain integrity
+tsm report --framework gdpr   # compliance report
+
+curl http://localhost:8080/metrics   # live JSON metrics
+```
+
+The dashboard at `http://localhost:3001` shows blocked / redacted / clean counts, average risk score, top PII types, and a live per-request table.
+
+---
+
+## Supported upstreams
+
+| Model prefix | Routes to | Requires |
+|---|---|---|
+| `gpt-*`, `o1`, `o3` | OpenAI | `OPENAI_API_KEY` |
+| `claude-*` | Anthropic | `ANTHROPIC_API_KEY` |
+| `llama*`, `mistral*`, `phi*`, `gemma*` | Ollama (local) | Ollama running |
+| Any + critical PII | Ollama (forced local) | — |
+
+---
+
+## Tests
+
+```bash
+pip install -e ".[dev,detector]"
+pytest tests/ -v
+```
+
+```
+tests/test_classifier.py          33 tests   entropy, Luhn, regex, negation, jailbreak
+tests/test_policy_engine.py       24 tests   rule DSL, priority, persistence, CRUD
+tests/test_proxy_integration.py   13 tests   HTTP proxy end-to-end, SSE streaming
+```
+
+---
+
+## Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `TSM_PORT` | `8080` | Proxy listen port |
+| `TSM_DETECTOR_URL` | `http://localhost:8001` | Detector service URL |
+| `OPENAI_API_KEY` | — | Forward to OpenAI |
+| `ANTHROPIC_API_KEY` | — | Forward to Anthropic |
+| `OLLAMA_HOST` | `http://localhost:11434` | Local model host |
+| `TSM_POLICY_PATH` | `~/.tsm/policy.json` | Policy rules file |
+
+---
+
+## Why not just use X?
+
+**vs. Presidio / spaCy**: Those are offline NLP libraries. TSM is a live proxy — your app doesn't change, every request is intercepted in real time, routing decisions happen per-request based on configurable policy.
+
+**vs. OpenAI's content filter**: Catches output only, not input. Doesn't redact. Doesn't route locally. No audit trail.
+
+**vs. writing your own scanner**: You'd need regex, entropy analysis, Luhn validation, context negation, jailbreak detection, SSE streaming, OpenAI API compatibility, and a policy engine. TSM ships all of it.
+
+---
+
+## License
+
+MIT — [tsm7979/tsm79](https://github.com/tsm7979/tsm79)

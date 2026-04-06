@@ -4,35 +4,38 @@ version = "2.0.0"
 description = "The AI Firewall — intercept every AI call, detect PII, redact it, route intelligently"
 authors = [{name = "TSM Team", email = "team@tsm.dev"}]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {text = "MIT"}
-keywords = ["ai", "firewall", "pii", "security", "openai", "proxy", "llm"]
+keywords = ["ai", "firewall", "pii", "security", "openai", "proxy", "llm", "data-privacy"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Security",
     "Topic :: Internet :: Proxy Servers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = []  # zero runtime dependencies — pure Python stdlib
+dependencies = []  # CLI + Python proxy: zero runtime deps — pure stdlib
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
-    "black>=23.0",
-    "ruff>=0.1",
+    "ruff>=0.4",
 ]
-full = [
-    "fastapi>=0.104",
-    "uvicorn[standard]>=0.24",
-    "httpx>=0.25",
+detector = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.7",
+]
+all = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.7",
 ]
 
 [project.urls]
@@ -49,20 +52,19 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where   = ["."]
-include = ["tsm*"]
+include = ["tsm*", "detector*"]
 
 [tool.setuptools.package-data]
-"tsm" = ["py.typed"]
-
-[tool.black]
-line-length    = 100
-target-version = ["py38"]
+"tsm"      = ["py.typed"]
+"detector" = ["py.typed"]
 
 [tool.ruff]
 line-length    = 100
-target-version = "py38"
-select         = ["E", "F", "I", "UP"]
-ignore         = ["E501"]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths    = ["tests"]
