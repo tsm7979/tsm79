@@ -254,12 +254,34 @@ class TSMHandler(BaseHTTPRequestHandler):
         # Update stats
         _State.stats.record(result, decision["is_local"])
 
-        # Build response
+        # ── Layer 5: Forward via adapter (real API / local / demo) ─
         latency = (time.time() - t0) * 1000
-        response = self._build_response(body, decision, result, latency)
+        try:
+            from tsm.adapters import get_adapter
+            route_model = "llama3" if decision["is_local"] else decision["model"]
+            adapter = get_adapter(route_model)
+            fwd_body = {**clean_body, "model": route_model, "stream": False}
+            resp = adapter.forward(fwd_body)
+            response = resp.to_openai_dict(f"chatcmpl-tsm-{int(time.time()*1000)}")
+            response["tsm"] = {
+                "firewall":       "active",
+                "adapter":        adapter.name,
+                "pii_detected":   list(result.types) + list(sem.types),
+                "severity":       effective_severity.value if effective_severity else "none",
+                "redacted":       not result.is_clean or not sem.is_clean,
+                "routed_local":   decision["is_local"],
+                "routing_reason": decision["reason"],
+                "latency_ms":     round(latency, 1),
+            }
+            if resp.error:
+                response["tsm"]["adapter_error"] = resp.error
+            cost = 0 if decision["is_local"] else (resp.prompt_tokens + resp.completion_tokens) / 1000 * 0.01
+        except Exception as e:
+            response = self._build_response(body, decision, result, latency)
+            response.setdefault("tsm", {})["adapter_error"] = str(e)
+            cost = response.pop("_cost", 0)
 
-        log_sent(decision["model"], latency, response.get("_cost", 0))
-        response.pop("_cost", None)
+        log_sent(decision["model"], latency, cost)
 
         # Audit — write to crypto-chained trust ledger
         if _State.ledger is not None:
@@ -342,46 +364,62 @@ class TSMHandler(BaseHTTPRequestHandler):
             )
         _State.stats.record(result, decision["is_local"])
 
-        # ── Build streaming reply ─────────────────────────────
-        cid = f"chatcmpl-tsm-stream-{int(time.time()*1000)}"
-        if decision["is_local"]:
-            reply = (
-                f"[TSM] Request kept local. "
-                f"Detected: {', '.join(all_pii_types) or 'none'}. "
-                f"Cloud never saw this data."
-            )
-        else:
-            reply = (
-                f"[TSM Demo] Forwarded to {decision['model']}. "
-                f"PII redacted: {', '.join(all_pii_types) or 'none'}."
-            )
+        # ── Forward stream via adapter ─────────────────────────
+        from tsm.adapters import get_adapter
+        route_model = "llama3" if decision["is_local"] else model
+        adapter = get_adapter(route_model)
+        fwd_body = {**clean_body, "model": route_model, "stream": True}
 
-        # ── Send SSE response ─────────────────────────────────
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("X-TSM-Firewall", "active")
+        self.send_header("X-TSM-Adapter", adapter.name)
         self.send_header("X-TSM-PII", ",".join(all_pii_types) or "none")
         self.end_headers()
 
-        words = reply.split()
-        for i, word in enumerate(words):
-            chunk = {
+        if adapter.name != "demo":
+            # Real streaming forward
+            try:
+                for chunk_str in adapter.forward_stream(fwd_body):
+                    self._sse(chunk_str)
+            except Exception as e:
+                self._sse(json.dumps({
+                    "id": "err", "object": "chat.completion.chunk",
+                    "choices": [{"index": 0, "delta": {"content": f"[TSM] Adapter error: {e}"}, "finish_reason": None}],
+                }))
+                self._sse("[DONE]")
+        else:
+            # Demo fallback — word-by-word simulation
+            cid = f"chatcmpl-tsm-stream-{int(time.time()*1000)}"
+            if decision["is_local"]:
+                reply = (
+                    f"[TSM] Request kept local. "
+                    f"Detected: {', '.join(all_pii_types) or 'none'}. "
+                    "Cloud never saw this data. Set OLLAMA_HOST or run Ollama for real local inference."
+                )
+            else:
+                reply = (
+                    f"[TSM] No API key configured. "
+                    f"Set OPENAI_API_KEY or ANTHROPIC_API_KEY to forward real requests. "
+                    f"PII would have been redacted: {', '.join(all_pii_types) or 'none'}."
+                )
+            words = reply.split()
+            for i, word in enumerate(words):
+                chunk = {
+                    "id": cid, "object": "chat.completion.chunk",
+                    "created": int(time.time()), "model": route_model,
+                    "choices": [{"index": 0, "delta": {"content": word + (" " if i < len(words) - 1 else "")}, "finish_reason": None}],
+                }
+                self._sse(json.dumps(chunk))
+                time.sleep(0.015)
+            final = {
                 "id": cid, "object": "chat.completion.chunk",
-                "created": int(time.time()), "model": decision["model"],
-                "choices": [{"index": 0, "delta": {"content": word + (" " if i < len(words)-1 else "")}, "finish_reason": None}],
+                "created": int(time.time()), "model": route_model,
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
             }
-            self._sse(json.dumps(chunk))
-            time.sleep(0.015)  # simulate token-by-token pacing
-
-        # Final chunk with finish_reason
-        final = {
-            "id": cid, "object": "chat.completion.chunk",
-            "created": int(time.time()), "model": decision["model"],
-            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-        }
-        self._sse(json.dumps(final))
-        self._sse("[DONE]")
+            self._sse(json.dumps(final))
+            self._sse("[DONE]")
 
     def _build_response(
         self,
