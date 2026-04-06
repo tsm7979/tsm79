@@ -50,3 +50,10 @@ Thumbs.db
 *.db
 *.sqlite
 logs/
+
+# ─── Node.js ──────────────────────────────────────────────
+node_modules/
+proxy/dist/
+dashboard/.next/
+dashboard/out/
+*.tsbuildinfo

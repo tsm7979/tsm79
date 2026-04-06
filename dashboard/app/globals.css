@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg:      #0a0a0f;
+  --surface: #111118;
+  --border:  #1e1e2e;
+  --text:    #e2e2f0;
+  --muted:   #6b6b8a;
+  --accent:  #7c6af5;
+  --green:   #22c55e;
+  --red:     #ef4444;
+  --yellow:  #f59e0b;
+  --blue:    #3b82f6;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  min-height: 100vh;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.stat-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+.stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px; }
+
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+}
+.badge-allow  { background: #052e16; color: var(--green); }
+.badge-redact { background: #422006; color: var(--yellow); }
+.badge-block  { background: #2d0e0e; color: var(--red); }
+.badge-local  { background: #0c1a3d; color: var(--blue); }
+
+.risk-bar {
+  height: 4px; border-radius: 2px; background: var(--border); overflow: hidden;
+}
+.risk-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }
+.pulse { animation: pulse 2s infinite; }
