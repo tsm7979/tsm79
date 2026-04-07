@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-proxy
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: proxy
+spec:
+  type: {{ .Values.service.proxy.type }}
+  ports:
+    - port: {{ .Values.service.proxy.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: proxy
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-detector
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: detector
+spec:
+  type: {{ .Values.service.detector.type }}
+  ports:
+    - port: {{ .Values.service.detector.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: detector
+---
+{{- if .Values.dashboard.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-dashboard
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+spec:
+  type: {{ .Values.service.dashboard.type }}
+  ports:
+    - port: {{ .Values.service.dashboard.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: dashboard
+{{- end }}

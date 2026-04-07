@@ -5,7 +5,8 @@ Layers (in order):
   1. Regex + context negation   — fast, zero latency
   2. Entropy analysis            — catches obfuscated secrets
   3. Structural parsing          — JWTs, API key prefixes, JSON payloads
-  4. LLM-assisted classification — called only when layers 1-3 are ambiguous
+  4. spaCy NER                   — catches prose PII (names+addresses, orgs)
+  5. LLM-assisted classification — called only when layers 1-4 are ambiguous
 """
 from __future__ import annotations
 
@@ -18,6 +19,26 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
+
+# ── spaCy NER (optional — degrades gracefully if not installed) ───────────────
+try:
+    import spacy
+    _NLP = spacy.load("en_core_web_sm")
+    _SPACY_OK = True
+except Exception:
+    _NLP = None
+    _SPACY_OK = False
+
+# spaCy entity types we care about
+_NER_MAP = {
+    "PERSON":  ("PERSON_NAME", "medium"),
+    "GPE":     ("LOCATION",    "low"),
+    "LOC":     ("LOCATION",    "low"),
+    "ORG":     ("ORG_NAME",    "low"),
+    "DATE":    ("DATE_INFO",   "low"),
+    "MONEY":   ("FINANCIAL",   "medium"),
+    "CARDINAL": None,   # skip — too noisy
+}
 
 # ── Shannon entropy ───────────────────────────────────────────────────────────
 
@@ -245,6 +266,37 @@ class Classifier:
                     "redacted": True,
                 })
 
+        return findings
+
+    def ner_scan(self, text: str) -> list[dict]:
+        """
+        spaCy NER pass — catches prose PII that regex misses:
+          'John Smith born March 4 1985 lives at 123 Main St'
+        Returns findings list; empty if spaCy not installed.
+        """
+        if not _SPACY_OK or not _NLP:
+            return []
+        findings = []
+        try:
+            doc = _NLP(text[:1000])   # cap at 1000 chars for latency
+            seen: set[str] = set()
+            for ent in doc.ents:
+                mapped = _NER_MAP.get(ent.label_)
+                if mapped is None:
+                    continue
+                pii_type, severity = mapped
+                key = f"{pii_type}:{ent.text[:30]}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                findings.append({
+                    "type":     pii_type,
+                    "severity": severity,
+                    "context":  f"NER: {ent.label_} '{ent.text}'",
+                    "redacted": False,  # NER findings are informational — not auto-redacted
+                })
+        except Exception:
+            pass
         return findings
 
     async def llm_classify(self, text: str, existing_findings: list[dict]) -> list[dict]:

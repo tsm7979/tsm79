@@ -1,0 +1,104 @@
+version: "3.9"
+
+# TSM — The AI Firewall
+# Production-ready docker-compose
+#
+# Quick start:
+#   cp .env.example .env        # add your API keys
+#   docker compose up -d
+#   docker compose ps           # verify all healthy
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+services:
+
+  # ── Database ────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       tsm
+      POSTGRES_USER:     tsm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tsm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *default-logging
+
+  # ── Detection service (Python / FastAPI) ─────────────────────────
+  detector:
+    build:
+      context: .
+      dockerfile: Dockerfile.detector
+    restart: unless-stopped
+    environment:
+      DETECTOR_PORT:     "8001"
+      DATABASE_URL:      postgresql://tsm:${POSTGRES_PASSWORD}@db:5432/tsm
+      TSM_POLICY_PATH:   /data/policy.json
+      OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      TSM_WEBHOOK_URL:   ${TSM_WEBHOOK_URL:-}
+      TSM_LOG_FORMAT:    json
+    volumes:
+      - tsmdata:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  # ── Proxy (TypeScript / Node.js) ────────────────────────────────
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    restart: unless-stopped
+    ports:
+      - "${TSM_PORT:-8080}:8080"
+    environment:
+      TSM_PORT:          "8080"
+      TSM_DETECTOR_URL:  http://detector:8001
+      TSM_LOG_FORMAT:    json
+      TSM_RATE_LIMIT:    ${TSM_RATE_LIMIT:-100}   # req/min per client
+      OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    depends_on:
+      detector:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  # ── Dashboard (Next.js) ─────────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-3001}:3001"
+    environment:
+      NEXT_PUBLIC_PROXY_URL: ${PROXY_EXTERNAL_URL:-http://localhost:8080}
+    depends_on:
+      - proxy
+    logging: *default-logging
+
+volumes:
+  pgdata:
+  tsmdata:

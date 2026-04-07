@@ -1,0 +1,10 @@
+apiVersion: v2
+name: tsm
+description: TSM — The AI Firewall
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+keywords: [ai, firewall, pii, security, proxy]
+maintainers:
+  - name: TSM Team
+    email: team@tsm.dev

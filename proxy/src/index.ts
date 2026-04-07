@@ -15,31 +15,31 @@
  */
 
 import http, { IncomingMessage, ServerResponse } from 'http';
+import { randomUUID } from 'crypto';
 import { URL } from 'url';
 import { record, snapshot } from './metrics.js';
 import { resolveUpstream, forwardJSON, forwardStream, buildAuthHeaders } from './upstream.js';
 import { DetectionResult, RequestStats } from './types.js';
+import { checkRateLimit, remaining } from './ratelimit.js';
+import { isAllowed, recordSuccess, recordFailure, breakerStatus } from './circuit.js';
+import { logger } from './logger.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const PORT          = parseInt(process.env.TSM_PORT          ?? '8080');
 const DETECTOR_URL  = process.env.TSM_DETECTOR_URL           ?? 'http://localhost:8001';
-const LOG_LEVEL     = (process.env.TSM_LOG ?? 'info') as 'debug' | 'info' | 'warn' | 'error';
 
-// ── Logger ────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-const RESET = '\x1b[0m', DIM = '\x1b[2m', BOLD = '\x1b[1m';
-const CYAN = '\x1b[96m', GREEN = '\x1b[92m', YELLOW = '\x1b[93m', RED = '\x1b[91m';
-
-function log(level: string, msg: string, color = RESET): void {
-  const ts = new Date().toISOString().slice(11, 19);
-  console.log(`${DIM}${ts}${RESET} ${color}${BOLD}[TSM]${RESET} ${msg}`);
+function clientIp(req: IncomingMessage): string {
+  const fwd = req.headers['x-forwarded-for'];
+  if (fwd) return (Array.isArray(fwd) ? fwd[0] : fwd).split(',')[0].trim();
+  return req.socket.remoteAddress ?? 'unknown';
 }
 
-function info(msg: string)  { log('info',  msg, CYAN);   }
-function ok(msg: string)    { log('ok',    msg, GREEN);  }
-function warn(msg: string)  { log('warn',  msg, YELLOW); }
-function err(msg: string)   { log('err',   msg, RED);    }
+function orgId(req: IncomingMessage): string {
+  return (req.headers['x-tsm-org'] as string) ?? 'default';
+}
 
 // ── Detector client ───────────────────────────────────────────────────────────
 
@@ -59,7 +59,7 @@ async function detect(body: Record<string, unknown>): Promise<DetectionResult> {
     return await res.json() as DetectionResult;
   } catch (e) {
     // Detector unavailable — fail open (allow with warning) so proxy never blocks due to infra
-    warn(`Detector unavailable: ${e} — allowing request`);
+    logger.warn(`Detector unavailable: ${e} — allowing request`);
     return {
       risk_score: 0,
       action: 'allow',
@@ -124,9 +124,21 @@ async function handleChatCompletion(
   res: ServerResponse,
   rawBody: string,
 ): Promise<void> {
-  const t0 = Date.now();
-  let body: Record<string, unknown>;
+  const t0        = Date.now();
+  const requestId = randomUUID();
+  const ip        = clientIp(req);
+  const org       = orgId(req);
 
+  // ── Rate limiting ─────────────────────────────────────────────────────────
+  if (!checkRateLimit(ip)) {
+    logger.warn('rate_limited', { request_id: requestId, org_id: org });
+    sendJSON(res, 429, {
+      error: { code: 'rate_limited', message: 'Too many requests — slow down.' },
+    });
+    return;
+  }
+
+  let body: Record<string, unknown>;
   try {
     body = JSON.parse(rawBody);
   } catch {
@@ -134,34 +146,35 @@ async function handleChatCompletion(
     return;
   }
 
-  const model   = (body.model as string) ?? 'gpt-3.5-turbo';
+  const model    = (body.model as string) ?? 'gpt-3.5-turbo';
   const isStream = Boolean(body.stream);
 
   // ── Detection ─────────────────────────────────────────────────────────────
-  info(`→ ${model}  ${isStream ? '(stream)' : ''}`);
+  logger.info(`→ ${model}`, { request_id: requestId, org_id: org });
   const detection = await detect(body);
   const { action, pii_types, risk_score, severity, redacted_body, policy_rule } = detection;
 
   // ── TSM headers ───────────────────────────────────────────────────────────
   const tsmHeaders = {
-    'X-TSM-Action':    action,
-    'X-TSM-Risk':      String(risk_score),
-    'X-TSM-PII':       pii_types.join(',') || 'none',
-    'X-TSM-Severity':  severity,
-    'X-TSM-Policy':    policy_rule ?? 'default',
+    'X-TSM-Action':     action,
+    'X-TSM-Risk':       String(risk_score),
+    'X-TSM-PII':        pii_types.join(',') || 'none',
+    'X-TSM-Severity':   severity,
+    'X-TSM-Policy':     policy_rule ?? 'default',
+    'X-TSM-Request-ID': requestId,
   };
 
   // ── Block ─────────────────────────────────────────────────────────────────
   if (action === 'block') {
-    err(`BLOCKED  risk=${risk_score}  pii=${pii_types.join(',')}`);
+    logger.warn('BLOCKED', { request_id: requestId, org_id: org, risk_score, pii_types, model });
     sendJSON(res, 400, {
       error: {
         code:    'tsm_blocked',
         message: `[TSM] Request blocked — policy: ${policy_rule ?? 'security'}. Detected: ${pii_types.join(', ')}`,
       },
-      tsm: { action, risk_score, pii_types, policy_rule },
+      tsm: { action, risk_score, pii_types, policy_rule, request_id: requestId },
     });
-    record({ id: crypto.randomUUID(), ts: t0, model, action, pii_types, risk_score, latency_ms: Date.now() - t0, upstream: 'blocked' });
+    record({ id: requestId, ts: t0, model, action, pii_types, risk_score, latency_ms: Date.now() - t0, upstream: 'blocked' });
     return;
   }
 
@@ -170,58 +183,65 @@ async function handleChatCompletion(
     ? redacted_body as Record<string, unknown>
     : body;
 
-  const upstream = action === 'route_local' ? 'ollama' : resolveUpstream(model);
-  const authHeaders = buildAuthHeaders(upstream);
+  const upstream     = action === 'route_local' ? 'ollama' : resolveUpstream(model);
+  const authHeaders  = buildAuthHeaders(upstream);
   const upstreamPath = upstream === 'anthropic' ? '/v1/messages' : '/v1/chat/completions';
 
-  if (action !== 'allow') {
-    warn(`${action.toUpperCase()}  risk=${risk_score}  pii=${pii_types.join(',')}  → ${upstream}`);
-  } else {
-    ok(`CLEAN  → ${upstream}`);
+  logger.info(action === 'allow' ? `CLEAN → ${upstream}` : `${action.toUpperCase()} → ${upstream}`, {
+    request_id: requestId, org_id: org, risk_score, pii_types, model,
+  });
+
+  // ── Circuit breaker ───────────────────────────────────────────────────────
+  if (!isAllowed(upstream)) {
+    logger.warn('circuit_open', { request_id: requestId, upstream });
+    sendJSON(res, 503, {
+      error: { code: 'upstream_unavailable', message: `Upstream ${upstream} is temporarily unavailable. Try again shortly.` },
+      tsm:   { action, risk_score, pii_types, upstream },
+    });
+    return;
   }
 
   const latency = Date.now() - t0;
-  record({ id: crypto.randomUUID(), ts: t0, model, action, pii_types, risk_score, latency_ms: latency, upstream });
+  record({ id: requestId, ts: t0, model, action, pii_types, risk_score, latency_ms: latency, upstream });
 
   // ── Stream ────────────────────────────────────────────────────────────────
   if (isStream) {
     startSSE(res, tsmHeaders);
-
-    // If no upstream key configured, emit demo stream
     if (upstream === 'ollama' && !process.env.OLLAMA_HOST) {
-      const msg = `[TSM] No Ollama running. Action was ${action}. Risk score: ${risk_score}. ` +
-        `Detected: ${pii_types.join(', ') || 'none'}.`;
+      const msg = `[TSM] No Ollama running. Action=${action}. Risk=${risk_score}. PII=${pii_types.join(', ') || 'none'}.`;
       const words = msg.split(' ');
       for (let i = 0; i < words.length; i++) {
         const chunk = JSON.stringify({
-          id: 'demo', object: 'chat.completion.chunk', created: Date.now() / 1000 | 0, model,
+          id: requestId, object: 'chat.completion.chunk', created: Date.now() / 1000 | 0, model,
           choices: [{ index: 0, delta: { content: words[i] + (i < words.length - 1 ? ' ' : '') }, finish_reason: null }],
         });
         res.write(`data: ${chunk}\n\n`);
       }
-      res.write(`data: ${JSON.stringify({ id: 'demo', object: 'chat.completion.chunk', created: Date.now() / 1000 | 0, model, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`);
+      res.write(`data: ${JSON.stringify({ id: requestId, object: 'chat.completion.chunk', created: Date.now() / 1000 | 0, model, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`);
       res.write('data: [DONE]\n\n');
       res.end();
       return;
     }
-
     forwardStream(upstream, upstreamPath, forwardBody, authHeaders, res);
     return;
   }
 
   // ── Non-stream ────────────────────────────────────────────────────────────
   try {
-    const upstream_response = await forwardJSON(upstream, upstreamPath, forwardBody, authHeaders);
+    const upstreamResponse = await forwardJSON(upstream, upstreamPath, forwardBody, authHeaders);
+    recordSuccess(upstream);
     const enriched = {
-      ...upstream_response,
-      tsm: { action, risk_score, pii_types, severity, policy_rule, latency_ms: Date.now() - t0, upstream },
+      ...upstreamResponse,
+      tsm: { action, risk_score, pii_types, severity, policy_rule, latency_ms: Date.now() - t0, upstream, request_id: requestId },
     };
+    logger.request({ request_id: requestId, org_id: org, model, action, risk_score, pii_types, latency_ms: Date.now() - t0, upstream, status: 200 });
     sendJSON(res, 200, enriched);
   } catch (e) {
-    // Upstream failed — return structured error with TSM context
+    recordFailure(upstream);
+    logger.error('upstream_error', { request_id: requestId, upstream, error: String(e) });
     sendJSON(res, 502, {
       error: { code: 'upstream_error', message: String(e) },
-      tsm: { action, risk_score, pii_types, upstream },
+      tsm:   { action, risk_score, pii_types, upstream, request_id: requestId },
     });
   }
 }
@@ -243,7 +263,13 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   // ── Routes ─────────────────────────────────────────────────────────────────
 
   if (method === 'GET' && path === '/health') {
-    sendJSON(res, 200, { status: 'healthy', service: 'TSM Proxy', version: '2.0.0', detector: DETECTOR_URL });
+    sendJSON(res, 200, {
+      status:   'healthy',
+      service:  'TSM Proxy',
+      version:  '2.0.0',
+      detector:  DETECTOR_URL,
+      breakers:  breakerStatus(),
+    });
     return;
   }
 
@@ -290,12 +316,12 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 
 function shutdown(): void {
-  info('Shutting down gracefully...');
+  logger.info('Shutting down gracefully...');
   server.close(() => {
-    info('Proxy stopped.');
+    logger.info('Proxy stopped.');
     process.exit(0);
   });
-  setTimeout(() => process.exit(1), 5000); // force after 5s
+  setTimeout(() => process.exit(1), 5000);
 }
 
 process.on('SIGINT',  shutdown);
@@ -303,15 +329,16 @@ process.on('SIGTERM', shutdown);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
+const C2 = { r: '\x1b[0m', d: '\x1b[2m', b: '\x1b[1m', c: '\x1b[96m', g: '\x1b[92m' };
 server.listen(PORT, '0.0.0.0', () => {
   console.log('');
-  console.log(`${CYAN}${BOLD}  TSM Proxy${RESET}  ${DIM}v2.0.0${RESET}`);
-  console.log(`${DIM}  ${'─'.repeat(48)}${RESET}`);
-  console.log(`  Listening   ${BOLD}http://localhost:${PORT}${RESET}`);
-  console.log(`  Detector    ${DIM}${DETECTOR_URL}${RESET}`);
-  console.log(`  Metrics     ${DIM}http://localhost:${PORT}/metrics${RESET}`);
-  console.log(`${DIM}  ${'─'.repeat(48)}${RESET}`);
-  console.log(`  ${DIM}OPENAI_API_KEY    ${process.env.OPENAI_API_KEY    ? GREEN + 'set' : DIM + 'not set'}${RESET}`);
-  console.log(`  ${DIM}ANTHROPIC_API_KEY ${process.env.ANTHROPIC_API_KEY ? GREEN + 'set' : DIM + 'not set'}${RESET}`);
+  console.log(`${C2.c}${C2.b}  TSM Proxy${C2.r}  ${C2.d}v2.0.0${C2.r}`);
+  console.log(`${C2.d}  ${'─'.repeat(48)}${C2.r}`);
+  console.log(`  Listening   ${C2.b}http://localhost:${PORT}${C2.r}`);
+  console.log(`  Detector    ${C2.d}${DETECTOR_URL}${C2.r}`);
+  console.log(`  Metrics     ${C2.d}http://localhost:${PORT}/metrics${C2.r}`);
+  console.log(`${C2.d}  ${'─'.repeat(48)}${C2.r}`);
+  console.log(`  ${C2.d}OPENAI_API_KEY    ${process.env.OPENAI_API_KEY    ? C2.g + 'set' : C2.d + 'not set'}${C2.r}`);
+  console.log(`  ${C2.d}ANTHROPIC_API_KEY ${process.env.ANTHROPIC_API_KEY ? C2.g + 'set' : C2.d + 'not set'}${C2.r}`);
   console.log('');
 });

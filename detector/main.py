@@ -35,6 +35,8 @@ sys.path.insert(0, str(repo_root))
 
 from detector.classifier import Classifier
 from detector.policy_engine import PolicyEngine, PolicyRule
+from detector.alerting import alert_if_critical
+from detector.workspace import registry as workspace_registry
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
@@ -119,8 +121,17 @@ async def detect(req: DetectRequest):
     structural = classifier.structural_scan(text)
     scan.merge_structural(structural)
 
-    # ── Stage 4: Policy engine ────────────────────────────────────────────
-    policy_result = policy_engine.evaluate(
+    # ── Stage 4: spaCy NER — prose PII (names, addresses, orgs) ─────────
+    ner_findings = classifier.ner_scan(text)
+    if ner_findings:
+        scan.merge_structural(ner_findings)  # same merge path
+
+    # ── Stage 5: Policy engine (workspace-isolated) ───────────────────────
+    workspace_id = req.metadata.get("workspace_id", "default")
+    ws = workspace_registry.get(str(workspace_id))
+    active_policy = ws.policy_engine
+
+    policy_result = active_policy.evaluate(
         pii_types=scan.pii_types,
         risk_score=scan.risk_score,
         severity=scan.severity,
@@ -134,7 +145,18 @@ async def detect(req: DetectRequest):
     if policy_result.action in ("redact", "route_local"):
         redacted_body = _redact_body(req, scan.redacted_text)
 
-    latency = (time.time() - t0) * 1000
+    latency    = (time.time() - t0) * 1000
+    request_id = req.metadata.get("request_id", "unknown")
+
+    # Fire webhook for critical events (non-blocking)
+    if policy_result.action in ("block", "route_local") or scan.risk_score >= 80:
+        await alert_if_critical(
+            pii_types=scan.pii_types,
+            risk_score=scan.risk_score,
+            severity=scan.severity,
+            model=req.model,
+            request_id=request_id,
+        )
 
     return DetectResponse(
         risk_score   = scan.risk_score,
@@ -184,6 +206,42 @@ def delete_rule(name: str):
     if not removed:
         raise HTTPException(status_code=404, detail=f"Rule '{name}' not found")
     return {"status": "ok"}
+
+
+# ── Workspace management ───────────────────────────────────────────────────────
+
+class WorkspaceRequest(BaseModel):
+    org_id:     str
+    name:       str
+    rate_limit: int = 100
+
+@app.get("/workspaces")
+def list_workspaces():
+    return {"workspaces": workspace_registry.list_all()}
+
+@app.post("/workspaces/{workspace_id}")
+def create_workspace(workspace_id: str, req: WorkspaceRequest):
+    ws = workspace_registry.create(workspace_id, req.org_id, req.name, req.rate_limit)
+    return {"status": "ok", "workspace": ws.to_dict()}
+
+@app.delete("/workspaces/{workspace_id}")
+def delete_workspace(workspace_id: str):
+    removed = workspace_registry.delete(workspace_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"Workspace '{workspace_id}' not found or is default")
+    return {"status": "ok"}
+
+@app.get("/workspaces/{workspace_id}/rules")
+def get_workspace_rules(workspace_id: str):
+    ws = workspace_registry.get(workspace_id)
+    return {"rules": ws.policy_engine.rules_as_dict()}
+
+@app.post("/workspaces/{workspace_id}/rules")
+def add_workspace_rule(workspace_id: str, req: RuleRequest):
+    ws   = workspace_registry.get(workspace_id)
+    rule = PolicyRule(name=req.name, condition=req.condition, action=req.action, priority=req.priority)
+    ws.policy_engine.add_rule(rule)
+    return {"status": "ok", "rule": req.name, "workspace": workspace_id}
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 

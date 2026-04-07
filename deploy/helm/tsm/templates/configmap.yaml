@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+data:
+  TSM_DETECTOR_URL: "http://{{ .Release.Name }}-detector:{{ .Values.detector.port }}"
+  TSM_PORT: {{ .Values.proxy.port | quote }}
+  TSM_RATE_LIMIT: {{ .Values.proxy.rateLimit | quote }}
+  TSM_LOG_FORMAT: {{ .Values.proxy.logFormat | quote }}
+  DETECTOR_PORT: {{ .Values.detector.port | quote }}
+  DETECTOR_WORKERS: {{ .Values.detector.workers | quote }}
+  LOG_LEVEL: {{ .Values.detector.logLevel | quote }}
