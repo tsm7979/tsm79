@@ -29,40 +29,52 @@ class RiskLevel(str, Enum):
 
 
 # CVSS 3.1 base scores per PII type.
+# Keys match the names produced by detector/classifier.py _PATTERNS list.
 # Based on NVD scoring criteria for unauthorized disclosure of each data class.
 _CVSS_BASE: dict[str, float] = {
-    # ── Secrets / credentials ─────────────────────────────────────────────────
-    "API_KEY_OPENAI":    9.8,
-    "API_KEY_ANTHROPIC": 9.8,
-    "API_KEY_GITHUB":    9.8,
-    "API_KEY_AWS":       9.8,
-    "API_KEY_GCP":       9.8,
-    "API_KEY_AZURE":     9.8,
-    "PRIVATE_KEY":       9.8,
-    "JWT":               8.1,
-    "PASSWORD":          8.1,
+    # ── Secrets / credentials (classifier names) ──────────────────────────────
+    "OPENAI_KEY":         9.8,
+    "ANTHROPIC_KEY":      9.8,
+    "GITHUB_TOKEN":       9.8,
+    "AWS_KEY":            9.8,
+    "STRIPE_SECRET":      9.7,
+    "SENDGRID_KEY":       9.5,
+    "GITLAB_TOKEN":       9.5,
+    "PRIVATE_KEY":        9.9,
+    "JWT_TOKEN":          8.1,   # classifier produces JWT_TOKEN from structural scan
+    "JWT":                8.1,   # alias
+    "PASSWORD":           8.1,
+    "HIGH_ENTROPY_SECRET": 7.0,  # structural high-entropy (ambiguous)
     # ── Government ID / critical PII ─────────────────────────────────────────
     "SSN":               7.5,
     "PASSPORT":          7.5,
     "DRIVERS_LICENSE":   7.2,
-    # ── Financial ─────────────────────────────────────────────────────────────
+    "MEDICAL_RECORD_NUM": 7.5,
+    # ── Financial ────────────────────────────────────────────────────────────
     "CREDIT_CARD":       7.5,
     "IBAN":              7.2,
     "BANK_ACCOUNT":      7.2,
-    # ── Health / HIPAA-covered ────────────────────────────────────────────────
+    # ── Health / HIPAA-covered ───────────────────────────────────────────────
     "MEDICAL_INFO":      7.1,
     "HEALTH_RECORD":     7.1,
+    "BIOMETRIC":         7.1,
     # ── Contact / PII ────────────────────────────────────────────────────────
     "EMAIL":             5.3,
     "PHONE":             5.0,
     "ADDRESS":           4.8,
     "IP_ADDRESS":        3.7,
-    # ── NER / prose PII (context-dependent) ──────────────────────────────────
+    # ── NER / prose PII (spaCy, context-dependent) ───────────────────────────
+    "PERSON_NAME":       3.1,   # classifier maps PERSON → PERSON_NAME
     "PERSON":            3.1,
+    "ORG_NAME":          2.0,   # classifier maps ORG → ORG_NAME
     "ORG":               2.0,
-    "GPE":               2.0,  # geo-political entity
+    "LOCATION":          2.5,   # classifier maps GPE/LOC → LOCATION
+    "GPE":               2.0,
+    "DATE_INFO":         2.0,
+    "FINANCIAL":         4.0,   # classifier maps MONEY → FINANCIAL
     "MONEY":             4.0,
-    # ── Structural (detected by pattern, not type) ────────────────────────────
+    # ── Structural / jailbreak ───────────────────────────────────────────────
+    "JAILBREAK":         8.0,
     "HIGH_ENTROPY":      4.0,
 }
 
