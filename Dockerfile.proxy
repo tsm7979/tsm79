@@ -1,16 +1,20 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
+# Install ALL deps including devDeps (tsc, tsx) needed to compile
 COPY proxy/package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 COPY proxy/src ./src
 COPY proxy/tsconfig.json ./
-RUN npx tsc
+# Typecheck + compile TypeScript → dist/
+RUN npx tsc --noEmit && npx tsc
 
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+# Copy compiled output from builder; reinstall only production deps
+COPY proxy/package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
   CMD wget -qO- http://localhost:8080/health || exit 1

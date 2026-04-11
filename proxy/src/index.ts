@@ -33,6 +33,25 @@ const DETECTOR_URL      = process.env.TSM_DETECTOR_URL               ?? 'http://
 // degrade — apply fast-path regex only, skip ML scan
 const DETECTOR_FAILURE_MODE = (process.env.TSM_DETECTOR_FAILURE_MODE ?? 'allow') as 'allow' | 'block' | 'degrade';
 
+// ── Distributed tracing ───────────────────────────────────────────────────────
+// Headers to extract from client requests and forward to the detector + upstream,
+// enabling end-to-end distributed traces: Client → TSM Proxy → Detector → Upstream AI.
+const TRACE_HEADER_KEYS = [
+  'traceparent', 'tracestate',                                         // W3C Trace Context (RFC 9204)
+  'x-b3-traceid', 'x-b3-spanid', 'x-b3-parentspanid', 'x-b3-sampled', // Zipkin B3
+  'x-datadog-trace-id', 'x-datadog-parent-id', 'x-datadog-sampling-priority', // Datadog APM
+  'x-request-id',                                                      // Generic correlation
+] as const;
+
+function extractTraceHeaders(req: IncomingMessage): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of TRACE_HEADER_KEYS) {
+    const val = req.headers[key];
+    if (val) out[key] = Array.isArray(val) ? val[0] : val;
+  }
+  return out;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function clientIp(req: IncomingMessage): string {
@@ -47,14 +66,17 @@ function orgId(req: IncomingMessage): string {
 
 // ── Detector client ───────────────────────────────────────────────────────────
 
-async function detect(body: Record<string, unknown>): Promise<DetectionResult> {
+async function detect(
+  body: Record<string, unknown>,
+  traceHeaders: Record<string, string> = {},
+): Promise<DetectionResult> {
   const controller = new AbortController();
   const timeout    = setTimeout(() => controller.abort(), 5_000);
 
   try {
     const res = await fetch(`${DETECTOR_URL}/detect`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...traceHeaders },
       body:    JSON.stringify(body),
       signal:  controller.signal,
     });
@@ -142,16 +164,19 @@ async function handleChatCompletion(
   res: ServerResponse,
   rawBody: string,
 ): Promise<void> {
-  const t0        = Date.now();
-  const requestId = randomUUID();
-  const ip        = clientIp(req);
-  const org       = orgId(req);
+  const t0           = Date.now();
+  const requestId    = randomUUID();
+  const ip           = clientIp(req);
+  const org          = orgId(req);
+  const traceHeaders = extractTraceHeaders(req);
 
   // ── Rate limiting ─────────────────────────────────────────────────────────
   if (!checkRateLimit(ip)) {
     logger.warn('rate_limited', { request_id: requestId, org_id: org });
+    const retryAfter = Math.ceil(60 - (remaining(ip) / parseInt(process.env.TSM_RATE_LIMIT ?? '100')) * 60);
+    res.setHeader('Retry-After', String(Math.max(1, retryAfter)));
     sendJSON(res, 429, {
-      error: { code: 'rate_limited', message: 'Too many requests — slow down.' },
+      error: { code: 'rate_limited', message: 'Too many requests — slow down.', retry_after_seconds: Math.max(1, retryAfter) },
     });
     return;
   }
@@ -169,7 +194,7 @@ async function handleChatCompletion(
 
   // ── Detection ─────────────────────────────────────────────────────────────
   logger.info(`→ ${model}`, { request_id: requestId, org_id: org });
-  const detection = await detect(body);
+  const detection = await detect(body, traceHeaders);
   const { action, pii_types, risk_score, severity, redacted_body, policy_rule } = detection;
 
   // ── TSM headers ───────────────────────────────────────────────────────────
@@ -202,7 +227,8 @@ async function handleChatCompletion(
     : body;
 
   const upstream     = action === 'route_local' ? 'ollama' : resolveUpstream(model);
-  const authHeaders  = buildAuthHeaders(upstream);
+  // Merge auth + trace headers so upstream carries the distributed trace context.
+  const authHeaders  = { ...buildAuthHeaders(upstream), ...traceHeaders };
   const upstreamPath = upstream === 'anthropic' ? '/v1/messages' : '/v1/chat/completions';
 
   logger.info(action === 'allow' ? `CLEAN → ${upstream}` : `${action.toUpperCase()} → ${upstream}`, {
@@ -248,9 +274,44 @@ async function handleChatCompletion(
   try {
     const upstreamResponse = await forwardJSON(upstream, upstreamPath, forwardBody, authHeaders);
     recordSuccess(upstream);
+
+    // ── Output scanning — scan AI response for PII leakage ───────────────
+    // Catches model memorisation leaks, RAG retrieval leaking PII, etc.
+    let responseText = '';
+    const choices = (upstreamResponse as Record<string, unknown>).choices;
+    if (Array.isArray(choices) && choices.length > 0) {
+      const first = choices[0] as Record<string, unknown>;
+      const msg = first.message as Record<string, unknown> | undefined;
+      responseText = (msg?.content as string) ?? '';
+    }
+    let outputScan: { pii_found: boolean; pii_types: string[]; risk_score: number } | null = null;
+    if (responseText && process.env.TSM_OUTPUT_SCAN !== '0') {
+      try {
+        const scanRes = await fetch(`${DETECTOR_URL}/scan-response`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ response_text: responseText, model, request_id: requestId }),
+          signal: AbortSignal.timeout(3000),
+        });
+        if (scanRes.ok) {
+          outputScan = await scanRes.json() as typeof outputScan;
+          if (outputScan?.pii_found) {
+            logger.warn('OUTPUT_PII_DETECTED', {
+              request_id: requestId, org_id: org, model,
+              pii_types: outputScan.pii_types, risk_score: outputScan.risk_score,
+            });
+          }
+        }
+      } catch { /* non-blocking — never fail the response */ }
+    }
+
     const enriched = {
       ...upstreamResponse,
-      tsm: { action, risk_score, pii_types, severity, policy_rule, latency_ms: Date.now() - t0, upstream, request_id: requestId },
+      tsm: {
+        action, risk_score, pii_types, severity, policy_rule,
+        latency_ms: Date.now() - t0, upstream, request_id: requestId,
+        output_scan: outputScan ?? undefined,
+      },
     };
     logger.request({ request_id: requestId, org_id: org, model, action, risk_score, pii_types, latency_ms: Date.now() - t0, upstream, status: 200 });
     sendJSON(res, 200, enriched);

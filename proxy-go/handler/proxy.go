@@ -88,6 +88,12 @@ func completionHandler(det *detectorClient, al *audit.Log) http.HandlerFunc {
 
 		model := stringField(body, "model", "gpt-3.5-turbo")
 
+		// ── Extract distributed trace headers ─────────────────────────────────
+		// Forward W3C Trace Context, Zipkin B3, and Datadog APM headers from the
+		// client to the detector and (when UPSTREAM_FORWARD=1) to the upstream AI
+		// provider, enabling end-to-end distributed tracing across the full path.
+		traceHeaders := extractTraceHeaders(r)
+
 		// ── Fast-path local PII scan (< 0.5 ms) ──────────────────────────────
 		text    := extractText(body)
 		fpType, fpSev := fastPathScan(text)
@@ -122,11 +128,30 @@ func completionHandler(det *detectorClient, al *audit.Log) http.HandlerFunc {
 			defer cancel()
 
 			detStart := time.Now()
-			det_result, detErr := det.Detect(ctx, body)
+			det_result, detErr := det.Detect(ctx, body, traceHeaders)
 			detectorDuration.Observe(time.Since(detStart).Seconds())
 
 			if detErr != nil {
-				slog.Warn("detector unavailable, failing open", "err", detErr)
+				failureMode := strings.ToLower(strings.TrimSpace(os.Getenv("TSM_DETECTOR_FAILURE_MODE")))
+				switch failureMode {
+				case "block":
+					// Fail closed — block all traffic until detector recovers
+					slog.Warn("detector unavailable, failing CLOSED (block mode)", "err", detErr)
+					sendJSON(w, http.StatusServiceUnavailable, map[string]any{
+						"error": map[string]any{
+							"code":    "detector_unavailable",
+							"message": "Security detector is unavailable. Requests blocked until service recovers.",
+						},
+					})
+					return
+				case "degrade":
+					// Fast-path already ran; pass through with a degraded flag
+					slog.Warn("detector unavailable, degraded mode (fast-path only)", "err", detErr)
+					// det_result already set to failOpen() above — continue
+				default:
+					// "allow" (default) — fail open, log warning
+					slog.Warn("detector unavailable, failing open (allow mode)", "err", detErr)
+				}
 			}
 
 			action     = det_result.Action
@@ -233,6 +258,28 @@ func completionHandler(det *detectorClient, al *audit.Log) http.HandlerFunc {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// traceHeaderKeys lists the distributed-tracing headers we propagate.
+// W3C Trace Context (RFC 9204), Zipkin B3, and Datadog APM are all supported
+// so TSM works with any observability backend out of the box.
+var traceHeaderKeys = []string{
+	"Traceparent", "Tracestate",                           // W3C Trace Context
+	"X-B3-Traceid", "X-B3-Spanid", "X-B3-Parentspanid", "X-B3-Sampled", // Zipkin B3
+	"X-Datadog-Trace-Id", "X-Datadog-Parent-Id", "X-Datadog-Sampling-Priority", // Datadog
+	"X-Request-Id",                                        // Generic correlation
+}
+
+// extractTraceHeaders copies trace propagation headers from an incoming request
+// into a flat map ready to be set on outbound detector / upstream calls.
+func extractTraceHeaders(r *http.Request) map[string]string {
+	out := make(map[string]string, len(traceHeaderKeys))
+	for _, k := range traceHeaderKeys {
+		if v := r.Header.Get(k); v != "" {
+			out[k] = v
+		}
+	}
+	return out
+}
 
 func extractText(body map[string]any) string {
 	var sb strings.Builder

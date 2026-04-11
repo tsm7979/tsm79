@@ -43,7 +43,10 @@ func newDetectorClient(baseURL string) *detectorClient {
 // Detect sends body to /detect and returns the result.
 // On detector failure it fails open (allow with zero risk) so the proxy
 // never blocks legitimate traffic due to infra issues.
-func (d *detectorClient) Detect(ctx context.Context, body map[string]any) (DetectionResult, error) {
+//
+// traceHeaders are forwarded verbatim so the detector participates in the
+// distributed trace span (W3C traceparent, B3, Datadog, etc.).
+func (d *detectorClient) Detect(ctx context.Context, body map[string]any, traceHeaders map[string]string) (DetectionResult, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return failOpen(), nil
@@ -54,6 +57,9 @@ func (d *detectorClient) Detect(ctx context.Context, body map[string]any) (Detec
 		return failOpen(), nil
 	}
 	req.Header.Set("Content-Type", "application/json")
+	for k, v := range traceHeaders {
+		req.Header.Set(k, v)
+	}
 
 	resp, err := d.client.Do(req)
 	if err != nil {

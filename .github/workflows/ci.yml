@@ -8,7 +8,7 @@ on:
 
 jobs:
   test-python:
-    name: Python tests
+    name: Python tests (unit + integration)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -22,20 +22,41 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Install dependencies (core + detector extras + dev)
         run: |
-          pip install -e ".[dev]"
-          pip install fastapi uvicorn pydantic pytest pytest-asyncio
+          pip install -e ".[dev,detector]"
+          python -m spacy download en_core_web_sm --quiet
 
-      - name: Run unit tests (classifier + policy)
+      - name: Run unit tests (classifier + policy engine)
         run: pytest tests/test_classifier.py tests/test_policy_engine.py -v
 
-      - name: Run integration tests (proxy)
+      - name: Run integration tests (Python proxy)
         run: pytest tests/test_proxy_integration.py -v
         timeout-minutes: 3
 
+  test-e2e:
+    name: E2E tests (detector pipeline)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev,detector]"
+          python -m spacy download en_core_web_sm --quiet
+
+      - name: Run E2E tests against live detector
+        run: pytest tests/test_e2e.py -v --timeout=60
+        timeout-minutes: 5
+
   test-typescript:
-    name: TypeScript typecheck
+    name: TypeScript typecheck + build
     runs-on: ubuntu-latest
 
     steps:
@@ -48,14 +69,17 @@ jobs:
           cache: "npm"
           cache-dependency-path: proxy/package-lock.json
 
-      - name: Install proxy dependencies
+      - name: Install proxy dependencies (all, including devDeps for tsc)
         run: cd proxy && npm ci
 
       - name: TypeScript typecheck
         run: cd proxy && npx tsc --noEmit
 
+      - name: TypeScript compile (verify build succeeds)
+        run: cd proxy && npx tsc
+
   lint:
-    name: Lint
+    name: Lint + type annotations
     runs-on: ubuntu-latest
 
     steps:
@@ -69,5 +93,8 @@ jobs:
       - name: Install ruff
         run: pip install ruff
 
-      - name: Lint
-        run: ruff check tsm/ detector/ --select E,F,I --ignore E501
+      - name: Lint Python (errors + imports + style)
+        run: ruff check tsm/ detector/ sdk/ --select E,F,I,W --ignore E501
+
+      - name: Format check
+        run: ruff format --check tsm/ detector/ sdk/

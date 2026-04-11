@@ -19,6 +19,7 @@ export function snapshot(): {
   avg_risk: number;
   top_pii: Record<string, number>;
   recent: RequestStats[];
+  window_size: number;
 } {
   const entries = ring.filter(Boolean);
   const blocked      = entries.filter(e => e.action === 'block').length;
@@ -37,10 +38,13 @@ export function snapshot(): {
   }
 
   return {
+    // total = absolute request count (lifetime); action counts reflect last RING_SIZE window
     total: head,
     blocked, redacted, routed_local: local, clean,
     avg_risk: Math.round(avg_risk * 10) / 10,
     top_pii,
     recent: entries.slice(-20).reverse(),
+    // window_size lets the dashboard show "last N requests" correctly
+    window_size: entries.length,
   };
 }

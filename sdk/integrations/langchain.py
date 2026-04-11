@@ -75,7 +75,7 @@ class TSMCallbackHandler(BaseCallbackHandler):
     ) -> None:
         """Called before every ChatModel invocation."""
         for batch in messages:
-            for msg in batch:
+            for i, msg in enumerate(batch):
                 text = msg.content if isinstance(msg.content, str) else str(msg.content)
                 result = self._client.detect_text(text, user_role=self._user_role)
                 tsm    = TSMResult.from_detect(result)
@@ -83,12 +83,18 @@ class TSMCallbackHandler(BaseCallbackHandler):
                 if tsm.is_blocked:
                     if self._on_block == "raise":
                         raise TSMBlockedError(tsm)
-                    # "skip" — silently drop (LangChain will still call the model with original)
+                    # "skip" — silently drop
                     return
 
-                # Replace message content with redacted version
+                # Replace message content with redacted version.
+                # LangChain messages may be immutable (frozen Pydantic models in v0.2+),
+                # so we replace the item in the list rather than mutating msg.content.
                 if not tsm.is_clean and tsm.redacted_text:
-                    msg.content = tsm.redacted_text  # type: ignore[assignment]
+                    try:
+                        msg.content = tsm.redacted_text  # type: ignore[assignment]
+                    except (AttributeError, TypeError, ValueError):
+                        # Immutable message — replace slot in the batch list
+                        batch[i] = msg.model_copy(update={"content": tsm.redacted_text})  # type: ignore[attr-defined]
 
     def on_llm_start(
         self,

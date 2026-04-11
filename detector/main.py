@@ -87,6 +87,23 @@ class DetectResponse(BaseModel):
     policy_rule: str | None
     latency_ms: float
 
+class ScanResponseRequest(BaseModel):
+    """Scan an AI model's response text for PII leakage."""
+    response_text: str
+    model: str = "gpt-3.5-turbo"
+    request_id: str | None = None
+    metadata: dict[str, Any] = {}
+
+class ScanResponseResult(BaseModel):
+    """Result of scanning an AI response for PII leakage."""
+    pii_found: bool
+    pii_types: list[str]
+    risk_score: float
+    severity: str
+    redacted_text: str
+    findings: list[Finding]
+    latency_ms: float
+
 class RuleRequest(BaseModel):
     name: str
     condition: dict[str, Any]
@@ -162,8 +179,7 @@ async def detect(req: DetectRequest):
     # ── Stage 8: Redact using centralized Sanitizer ───────────────────────────
     redacted_body = dict(req.model_dump())
     if policy_result.action in ("redact", "route_local"):
-        san_result = sanitizer.sanitize(text)
-        redacted_body = _redact_body(req, san_result.sanitized_text)
+        redacted_body = _redact_body_messages(req)
 
     latency    = (time.time() - t0) * 1000
     request_id = req.metadata.get("request_id", "unknown")
@@ -190,19 +206,79 @@ async def detect(req: DetectRequest):
     )
 
 
-def _redact_body(req: DetectRequest, redacted_text: str) -> dict[str, Any]:
-    """Rebuild the request body with redacted user messages."""
+def _redact_body_messages(req: DetectRequest) -> dict[str, Any]:
+    """
+    Rebuild the request body with each user message independently sanitized.
+
+    Previous bug: sanitize(join(all_user_msgs)) → apply to EACH message.
+    This replaced every message with the entire joined corpus, which is wrong
+    when there are multiple user messages (multi-turn conversations).
+
+    Fix: sanitize each user message content individually.
+    """
     body = req.model_dump()
     new_messages = []
     for m in req.messages:
-        if m.get("role") == "user":
-            new_messages.append({**m, "content": redacted_text})
+        if m.get("role") == "user" and isinstance(m.get("content"), str):
+            san = sanitizer.sanitize(m["content"])
+            new_messages.append({**m, "content": san.sanitized_text})
         else:
             new_messages.append(m)
     body["messages"] = new_messages
     if req.prompt:
-        body["prompt"] = redacted_text
+        san = sanitizer.sanitize(req.prompt)
+        body["prompt"] = san.sanitized_text
     return body
+
+
+@app.post("/scan-response", response_model=ScanResponseResult)
+async def scan_response(req: ScanResponseRequest):
+    """
+    Scan an AI model's response for PII leakage.
+
+    Enterprise use case: detect when the model accidentally outputs PII
+    (e.g., training data memorisation, RAG retrieval leaking records).
+
+    Unlike /detect which scans input prompts, this endpoint scans the
+    AI-generated response text before it reaches the end user.
+    """
+    t0 = time.time()
+
+    # Run the same multi-layer scan on the response text
+    scan = classifier.scan(req.response_text)
+
+    # Structural scan (JWTs, high-entropy tokens in response)
+    structural = classifier.structural_scan(req.response_text)
+    scan.merge_structural(structural)
+
+    # NER scan for prose PII in response
+    ner = classifier.ner_scan(req.response_text)
+    if ner:
+        scan.merge_structural(ner)
+
+    # CVSS scoring
+    if scan.pii_types:
+        cvss_score, cvss_level, _ = score_findings(scan.pii_types)
+        final_risk = max(scan.risk_score, cvss_score)
+        final_sev  = severity_from_level(cvss_level)
+    else:
+        final_risk = scan.risk_score
+        final_sev  = scan.severity
+
+    # Redact PII from response text
+    san = sanitizer.sanitize(req.response_text)
+
+    latency = (time.time() - t0) * 1000
+
+    return ScanResponseResult(
+        pii_found=len(scan.pii_types) > 0,
+        pii_types=scan.pii_types,
+        risk_score=final_risk,
+        severity=final_sev,
+        redacted_text=san.sanitized_text,
+        findings=[Finding(**f) for f in scan.raw_findings],
+        latency_ms=round(latency, 2),
+    )
 
 
 @app.get("/rules")
