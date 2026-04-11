@@ -136,6 +136,7 @@ def protect(
             # Check positional args
             sig    = inspect.signature(f)
             params = list(sig.parameters.keys())
+            text_arg_idx: int | None = None
             for i, (param, val) in enumerate(zip(params, args)):
                 if isinstance(val, str):
                     text = val
@@ -165,8 +166,8 @@ def protect(
 
             # Replace the string arg with redacted version if needed
             if not result.is_clean and result.redacted_text:
-                if 'text_arg_idx' in dir():
-                    new_args[text_arg_idx] = result.redacted_text  # type: ignore[index]
+                if text_arg_idx is not None:
+                    new_args[text_arg_idx] = result.redacted_text
 
             return f(*new_args, **kwargs)
 

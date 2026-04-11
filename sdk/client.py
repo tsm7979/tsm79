@@ -8,7 +8,7 @@ import json
 import os
 import urllib.request
 import urllib.error
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -86,14 +86,25 @@ class TSMClient:
             user_role=user_role,
         )
 
-    def add_rule(self, name: str, condition: dict, action: str, priority: int = 100) -> None:
-        """Add a policy rule via the detector API."""
+    def add_rule(self, name: str, condition: dict, action: str, priority: int = 100) -> bool:
+        """Add a policy rule via the detector API. Returns True on success, False if detector unavailable."""
         payload = json.dumps({"name": name, "condition": condition, "action": action, "priority": priority}).encode()
-        req = urllib.request.Request(f"{self.url}/rules", data=payload, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=self.timeout):
-            pass
+        req = urllib.request.Request(
+            f"{self.url}/rules",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout):
+                return True
+        except urllib.error.URLError:
+            return False
 
     def get_rules(self) -> list[dict]:
-        """List all active policy rules."""
-        with urllib.request.urlopen(f"{self.url}/rules", timeout=self.timeout) as r:
-            return json.loads(r.read()).get("rules", [])
+        """List all active policy rules. Returns empty list if detector unavailable."""
+        try:
+            with urllib.request.urlopen(f"{self.url}/rules", timeout=self.timeout) as r:
+                return json.loads(r.read()).get("rules", [])
+        except urllib.error.URLError:
+            return []

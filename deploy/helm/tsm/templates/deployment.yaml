@@ -39,15 +39,25 @@ spec:
             - secretRef:
                 name: {{ .Release.Name }}-secrets
           {{- end }}
-          {{- with .Values.postgresql }}
+          env:
+            - name: DATABASE_URL
+              {{- if .Values.postgresql.enabled }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.auth.existingSecret }}
+                  key: POSTGRES_PASSWORD
+              {{- else }}
+              value: ""
+              {{- end }}
+          {{- if .Values.postgresql.enabled }}
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .auth.existingSecret }}
+                  name: {{ .Values.postgresql.auth.existingSecret }}
                   key: POSTGRES_PASSWORD
             - name: DATABASE_URL
-              value: "postgresql://{{ .auth.username }}:$(POSTGRES_PASSWORD)@{{ $.Release.Name }}-postgresql:5432/{{ .auth.database }}"
+              value: "postgresql://{{ .Values.postgresql.auth.username }}:$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:5432/{{ .Values.postgresql.auth.database }}"
           {{- end }}
           resources:
             {{- toYaml .Values.proxy.resources | nindent 12 }}
@@ -86,7 +96,7 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
+        runAsUser: 65534  # matches Dockerfile.detector: USER nobody (UID 65534)
       containers:
         - name: detector
           image: {{ include "tsm.image" (dict "root" . "comp" "detector") }}

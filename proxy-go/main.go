@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -34,6 +35,11 @@ func main() {
 	detectorURL := envOr("TSM_DETECTOR_URL", "http://localhost:8001")
 	auditPath   := envOr("TSM_AUDIT_LOG",  "audit.jsonl")
 	auditSecret := envOr("TSM_AUDIT_SECRET", "change-me-in-production")
+	if auditSecret == "change-me-in-production" {
+		// Warn loudly — default secret compromises the tamper-proof audit chain.
+		// Set TSM_AUDIT_SECRET to a random 32+ byte secret in production.
+		fmt.Fprintln(os.Stderr, "[TSM] WARNING: TSM_AUDIT_SECRET is using the default value. Set a strong secret in production.")
+	}
 
 	// ── Structured logger ────────────────────────────────────────────────────
 	logLevel := slog.LevelInfo

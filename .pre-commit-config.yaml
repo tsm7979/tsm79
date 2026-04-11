@@ -1,0 +1,35 @@
+repos:
+  # Python: ruff lint + format
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+        types_or: [python]
+      - id: ruff-format
+        types_or: [python]
+
+  # General: trailing whitespace, end-of-file newline, large files
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: detect-private-key        # catch private keys before they're committed
+      - id: check-added-large-files
+        args: [--maxkb=500]
+
+  # TypeScript: tsc type-check (requires Node + tsc in PATH)
+  - repo: local
+    hooks:
+      - id: tsc-proxy
+        name: TypeScript type-check (proxy)
+        language: system
+        entry: bash -c "cd proxy && npx tsc --noEmit"
+        pass_filenames: false
+        files: ^proxy/src/
+        types_or: [ts]

@@ -78,10 +78,9 @@ func isAllowed(upstream string) bool {
 			return true
 		}
 		return false
-	case cbHalf:
+	default: // cbHalf and any future states
 		return true
 	}
-	return true
 }
 
 func recordSuccess(upstream string) {

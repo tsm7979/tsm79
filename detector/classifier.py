@@ -311,6 +311,15 @@ class Classifier:
         import urllib.request
         import json as _json
 
+        # Mask already-detected PII spans before sending to external LLM.
+        # This prevents TSM from leaking the very data it's supposed to protect.
+        safe_text = text[:500]
+        for finding in existing_findings:
+            ctx = finding.get("context", "")
+            if ctx and len(ctx) > 4:
+                # Replace any occurrence of the found context snippet with [REDACTED]
+                safe_text = safe_text.replace(ctx, "[REDACTED]")
+
         prompt = (
             "You are a data security classifier. Analyze the following text and list any "
             "sensitive information types found that aren't obviously covered by regex (e.g. "
@@ -318,7 +327,7 @@ class Classifier:
             "personal addresses). Reply ONLY with a JSON array like: "
             '[{"type": "MEDICAL_INFO", "severity": "high", "context": "..."}, ...] '
             "or [] if nothing sensitive. Be conservative — only flag clear cases.\n\n"
-            f"Text:\n{text[:500]}"
+            f"Text:\n{safe_text}"
         )
 
         try:

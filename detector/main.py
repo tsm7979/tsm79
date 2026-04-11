@@ -37,6 +37,9 @@ from detector.classifier import Classifier
 from detector.policy_engine import PolicyEngine, PolicyRule
 from detector.alerting import alert_if_critical
 from detector.workspace import registry as workspace_registry
+from detector.risk_scorer import score_findings, severity_from_level
+from detector.sanitizer import Sanitizer
+from detector.correlation import correlate, correlation_stats
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
@@ -54,8 +57,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-classifier   = Classifier()
+classifier    = Classifier()
 policy_engine = PolicyEngine()
+sanitizer     = Sanitizer()
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -94,10 +98,11 @@ class RuleRequest(BaseModel):
 @app.get("/health")
 def health():
     return {
-        "status":    "healthy",
-        "service":   "TSM Detector",
-        "version":   "2.0.0",
-        "llm_assist": bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")),
+        "status":       "healthy",
+        "service":      "TSM Detector",
+        "version":      "2.0.0",
+        "llm_assist":   bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")),
+        "correlation":  correlation_stats(),
     }
 
 @app.post("/detect", response_model=DetectResponse)
@@ -126,43 +131,58 @@ async def detect(req: DetectRequest):
     if ner_findings:
         scan.merge_structural(ner_findings)  # same merge path
 
-    # ── Stage 5: Policy engine (workspace-isolated) ───────────────────────
+    # ── Stage 5: CVSS-grounded risk scoring ──────────────────────────────────
+    if scan.pii_types:
+        cvss_score, cvss_level, _ = score_findings(scan.pii_types)
+        # Use the higher of regex-derived score and CVSS score for accuracy
+        final_risk_score = max(scan.risk_score, cvss_score)
+        final_severity   = severity_from_level(cvss_level)
+    else:
+        final_risk_score = scan.risk_score
+        final_severity   = scan.severity
+
+    # ── Stage 6: Correlation — dedup and pattern elevation ───────────────────
+    org_id = req.metadata.get("org_id", "default")
+    _is_dup, final_risk_score, corr_count = correlate(org_id, scan.pii_types, final_risk_score)
+
+    # ── Stage 7: Policy engine (workspace-isolated) ───────────────────────────
     workspace_id = req.metadata.get("workspace_id", "default")
     ws = workspace_registry.get(str(workspace_id))
     active_policy = ws.policy_engine
 
     policy_result = active_policy.evaluate(
         pii_types=scan.pii_types,
-        risk_score=scan.risk_score,
-        severity=scan.severity,
+        risk_score=final_risk_score,
+        severity=final_severity,
         user_role=req.user_role,
         model=req.model,
         metadata=req.metadata,
     )
 
-    # ── Stage 5: Redact if policy says so ─────────────────────────────────
+    # ── Stage 8: Redact using centralized Sanitizer ───────────────────────────
     redacted_body = dict(req.model_dump())
     if policy_result.action in ("redact", "route_local"):
-        redacted_body = _redact_body(req, scan.redacted_text)
+        san_result = sanitizer.sanitize(text)
+        redacted_body = _redact_body(req, san_result.sanitized_text)
 
     latency    = (time.time() - t0) * 1000
     request_id = req.metadata.get("request_id", "unknown")
 
     # Fire webhook for critical events (non-blocking)
-    if policy_result.action in ("block", "route_local") or scan.risk_score >= 80:
+    if policy_result.action in ("block", "route_local") or final_risk_score >= 80:
         await alert_if_critical(
             pii_types=scan.pii_types,
-            risk_score=scan.risk_score,
-            severity=scan.severity,
+            risk_score=final_risk_score,
+            severity=final_severity,
             model=req.model,
             request_id=request_id,
         )
 
     return DetectResponse(
-        risk_score   = scan.risk_score,
+        risk_score   = final_risk_score,
         action       = policy_result.action,
         pii_types    = scan.pii_types,
-        severity     = scan.severity,
+        severity     = final_severity,
         redacted_body= redacted_body,
         findings     = [Finding(**f) for f in scan.raw_findings],
         policy_rule  = policy_result.rule_name,
@@ -211,9 +231,10 @@ def delete_rule(name: str):
 # ── Workspace management ───────────────────────────────────────────────────────
 
 class WorkspaceRequest(BaseModel):
-    org_id:     str
-    name:       str
-    rate_limit: int = 100
+    org_id:              str
+    name:                str
+    rate_limit:          int = 100
+    compliance_framework: str | None = None  # gdpr | hipaa | soc2 | pci_dss
 
 @app.get("/workspaces")
 def list_workspaces():
@@ -222,7 +243,15 @@ def list_workspaces():
 @app.post("/workspaces/{workspace_id}")
 def create_workspace(workspace_id: str, req: WorkspaceRequest):
     ws = workspace_registry.create(workspace_id, req.org_id, req.name, req.rate_limit)
-    return {"status": "ok", "workspace": ws.to_dict()}
+    added_rules: list[str] = []
+    if req.compliance_framework:
+        added_rules = ws.policy_engine.load_compliance_framework(req.compliance_framework)
+    return {
+        "status":    "ok",
+        "workspace": ws.to_dict(),
+        "compliance_framework": req.compliance_framework,
+        "rules_loaded": added_rules,
+    }
 
 @app.delete("/workspaces/{workspace_id}")
 def delete_workspace(workspace_id: str):

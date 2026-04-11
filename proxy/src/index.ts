@@ -26,8 +26,12 @@ import { logger } from './logger.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const PORT          = parseInt(process.env.TSM_PORT          ?? '8080');
-const DETECTOR_URL  = process.env.TSM_DETECTOR_URL           ?? 'http://localhost:8001';
+const PORT              = parseInt(process.env.TSM_PORT              ?? '8080');
+const DETECTOR_URL      = process.env.TSM_DETECTOR_URL               ?? 'http://localhost:8001';
+// allow  — pass traffic through when detector is unreachable (default, safe for dev)
+// block  — return 503 until detector recovers (recommended for production)
+// degrade — apply fast-path regex only, skip ML scan
+const DETECTOR_FAILURE_MODE = (process.env.TSM_DETECTOR_FAILURE_MODE ?? 'allow') as 'allow' | 'block' | 'degrade';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -58,8 +62,22 @@ async function detect(body: Record<string, unknown>): Promise<DetectionResult> {
     if (!res.ok) throw new Error(`Detector ${res.status}`);
     return await res.json() as DetectionResult;
   } catch (e) {
-    // Detector unavailable — fail open (allow with warning) so proxy never blocks due to infra
-    logger.warn(`Detector unavailable: ${e} — allowing request`);
+    logger.warn(`Detector unavailable: ${e} — mode=${DETECTOR_FAILURE_MODE}`);
+    if (DETECTOR_FAILURE_MODE === 'block') {
+      // Fail closed: return a block result so the proxy returns 503
+      return {
+        risk_score: 100,
+        action: 'block',
+        pii_types: ['DETECTOR_UNAVAILABLE'],
+        severity: 'critical',
+        redacted_body: body,
+        findings: [],
+        latency_ms: 0,
+        policy_rule: 'detector_failure_block',
+      };
+    }
+    // allow or degrade: pass traffic through (degrade = same as allow for now;
+    // fast-path regex in Go proxy already covered the critical cases)
     return {
       risk_score: 0,
       action: 'allow',

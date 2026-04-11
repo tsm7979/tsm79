@@ -230,3 +230,76 @@ class PolicyEngine:
             }
             for r in all_rules
         ]
+
+    def load_compliance_framework(self, framework: str) -> list[str]:
+        """
+        Load predefined rules for a compliance framework.
+        Returns list of rule names added.
+
+        Supported frameworks: gdpr, hipaa, soc2, pci_dss
+        """
+        framework = framework.lower()
+        templates = _COMPLIANCE_TEMPLATES.get(framework, [])
+        added = []
+        for rule in templates:
+            self.add_rule(rule)
+            added.append(rule.name)
+        return added
+
+
+# ── Compliance framework rule templates ───────────────────────────────────────
+# These are layered on top of the built-in rules when a workspace enables a framework.
+
+_COMPLIANCE_TEMPLATES: dict[str, list[PolicyRule]] = {
+    # GDPR — EU General Data Protection Regulation
+    # Article 9: special categories (health, biometric, political) must be blocked.
+    # Article 83: financial penalties for unauthorized processing.
+    "gdpr": [
+        PolicyRule(name="gdpr_block_special_categories", priority=3,
+                   condition={"any_of": ["MEDICAL_INFO", "HEALTH_RECORD", "BIOMETRIC", "POLITICAL_OPINION"]},
+                   action="block"),
+        PolicyRule(name="gdpr_redact_contact_pii", priority=15,
+                   condition={"any_of": ["EMAIL", "PHONE", "ADDRESS", "PERSON"]},
+                   action="redact"),
+        PolicyRule(name="gdpr_redact_financial", priority=12,
+                   condition={"any_of": ["IBAN", "BANK_ACCOUNT", "CREDIT_CARD"]},
+                   action="redact"),
+    ],
+
+    # HIPAA — Health Insurance Portability and Accountability Act
+    # 18 PHI identifiers must be de-identified before sharing.
+    "hipaa": [
+        PolicyRule(name="hipaa_block_phi_identifiers", priority=3,
+                   condition={"any_of": ["MEDICAL_INFO", "HEALTH_RECORD", "SSN", "MEDICAL_RECORD_NUM"]},
+                   action="block"),
+        PolicyRule(name="hipaa_redact_contact_phi", priority=14,
+                   condition={"any_of": ["EMAIL", "PHONE", "ADDRESS", "PERSON", "BIRTHDATE"]},
+                   action="redact"),
+    ],
+
+    # SOC 2 — Service Organization Control (Trust Services Criteria)
+    # CC6: Logical and physical access controls. Secrets and credentials blocked.
+    "soc2": [
+        PolicyRule(name="soc2_block_credentials", priority=2,
+                   condition={"any_of": ["GITHUB_TOKEN", "OPENAI_KEY", "ANTHROPIC_KEY",
+                                          "AWS_KEY", "PRIVATE_KEY", "PASSWORD", "JWT"]},
+                   action="block"),
+        PolicyRule(name="soc2_redact_pii", priority=18,
+                   condition={"risk_score_gte": 50},
+                   action="redact"),
+    ],
+
+    # PCI DSS — Payment Card Industry Data Security Standard
+    # Requirement 3: Protect stored cardholder data.
+    "pci_dss": [
+        PolicyRule(name="pci_block_card_data", priority=2,
+                   condition={"any_of": ["CREDIT_CARD", "CVV", "TRACK_DATA"]},
+                   action="block"),
+        PolicyRule(name="pci_block_sensitive_auth", priority=3,
+                   condition={"any_of": ["PRIVATE_KEY", "API_KEY_STRIPE", "PASSWORD"]},
+                   action="block"),
+        PolicyRule(name="pci_redact_cardholder_info", priority=12,
+                   condition={"any_of": ["EMAIL", "PHONE", "ADDRESS", "PERSON"]},
+                   action="redact"),
+    ],
+}

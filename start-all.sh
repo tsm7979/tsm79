@@ -7,6 +7,10 @@ DETECTOR_PORT="${DETECTOR_PORT:-8001}"
 PROXY_PORT="${TSM_PORT:-8080}"
 DASHBOARD_PORT="${DASHBOARD_PORT:-3001}"
 
+# Cross-platform Python path: Linux/Mac use bin/, Windows uses Scripts/
+PYTHON="${PYTHON:-.venv/bin/python}"
+if [[ -f ".venv/Scripts/python" ]]; then PYTHON=".venv/Scripts/python"; fi
+
 GREEN='\033[92m'; CYAN='\033[96m'; DIM='\033[2m'; BOLD='\033[1m'; RESET='\033[0m'
 
 echo ""
@@ -18,7 +22,7 @@ echo ""
 echo -e "  Starting ${GREEN}detector${RESET} on :${DETECTOR_PORT}..."
 cd "$REPO"
 DETECTOR_PORT="$DETECTOR_PORT" \
-  .venv/Scripts/python -m uvicorn detector.main:app \
+  "$PYTHON" -m uvicorn detector.main:app \
     --host 0.0.0.0 --port "$DETECTOR_PORT" \
     --log-level warning \
     --no-access-log &
@@ -55,7 +59,7 @@ if [ ! -d node_modules ]; then
   echo "  Installing dashboard dependencies..."
   npm install --silent
 fi
-PROXY_URL="http://localhost:${PROXY_PORT}" \
+NEXT_PUBLIC_PROXY_URL="http://localhost:${PROXY_PORT}" \
   npm run dev > /dev/null 2>&1 &
 DASHBOARD_PID=$!
 echo "  dashboard PID: $DASHBOARD_PID"

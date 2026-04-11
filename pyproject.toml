@@ -31,11 +31,13 @@ detector = [
     "fastapi>=0.111",
     "uvicorn[standard]>=0.29",
     "pydantic>=2.7",
+    "spacy>=3.7.0",
 ]
 all = [
     "fastapi>=0.111",
     "uvicorn[standard]>=0.29",
     "pydantic>=2.7",
+    "spacy>=3.7.0",
 ]
 
 [project.urls]
