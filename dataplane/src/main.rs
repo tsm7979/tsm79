@@ -37,9 +37,48 @@ use pipeline::RateLimiter;
 #[allow(unused_imports)]
 use io::{set_nonblocking, set_reuseaddr, set_nodelay};
 
+// ── Health check (used by Docker HEALTHCHECK CMD) ────────────────────────────
+
+/// Perform a fast liveness check: open a TCP connection to localhost:8080,
+/// send a minimal HTTP/1.0 GET /health, and return 0 on "200 OK", 1 otherwise.
+///
+/// This is compiled into the same binary so distroless images (no wget/curl)
+/// can still run `tsm-dataplane --health-check` as the HEALTHCHECK command.
+fn do_health_check() -> i32 {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    let req = b"GET /health HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    let Ok(mut s) = TcpStream::connect("127.0.0.1:8080") else { return 1; };
+    s.set_read_timeout(Some(Duration::from_secs(2))).ok();
+    if s.write_all(req).is_err() { return 1; }
+    let mut buf = [0u8; 128];
+    match s.read(&mut buf) {
+        Ok(n) if n >= 12 => {
+            // Accept any HTTP 2xx
+            if buf[..n].starts_with(b"HTTP/")
+                && buf[..n].windows(4).any(|w| w == b" 200")
+            {
+                0
+            } else {
+                1
+            }
+        }
+        _ => 1,
+    }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 fn main() {
+    // When invoked as `tsm-dataplane --health-check` (used by Docker HEALTHCHECK),
+    // do a quick liveness probe against the running instance and exit.
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 && args[1] == "--health-check" {
+        std::process::exit(do_health_check());
+    }
+
     let config = Arc::new(Config::from_env());
 
     if config.log_level == "debug" {

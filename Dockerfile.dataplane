@@ -2,24 +2,29 @@
 # Multi-stage build: compile Rust binary → minimal runtime image
 #
 # Stage 1: builder
-#   - Uses the official Rust toolchain on Debian Bookworm
+#   - Uses the official Rust toolchain on Debian Bookworm Slim
 #   - Caches Cargo registry and compiled deps separately from source
 #   - Produces a statically linked binary (musl target)
+#   - Creates /var/log/tsm with correct ownership (uid 65532 = distroless nonroot)
 #
 # Stage 2: runtime
 #   - Distroless (no shell, no package manager, minimal attack surface)
 #   - Only the binary + audit log directory
+#   - HEALTHCHECK uses the binary's own --health-check subcommand (no wget needed)
 
 # ── Stage 1: Build ────────────────────────────────────────────────────────────
 
-FROM rust:1.78-bookworm AS builder
+# Pin to rust:slim-bookworm (tracks latest stable; use a digest in prod for reproducibility).
+# Using slim to reduce builder layer size vs the full toolchain image.
+FROM rust:slim-bookworm AS builder
 
 WORKDIR /build
 
-# Install musl tools for static linking
+# Install musl tools for static linking + file for binary verification
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
         musl-tools \
         ca-certificates \
+        file \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup target add x86_64-unknown-linux-musl
@@ -48,9 +53,13 @@ WORKDIR /build/dataplane
 RUN touch src/main.rs && \
     cargo build --release --target x86_64-unknown-linux-musl
 
-# Verify the binary exists and is statically linked
-RUN file target/x86_64-unknown-linux-musl/release/tsm-dataplane && \
+# Verify the binary is statically linked (no glibc deps)
+RUN file target/x86_64-unknown-linux-musl/release/tsm-dataplane | grep -q "statically linked" && \
     ls -lh target/x86_64-unknown-linux-musl/release/tsm-dataplane
+
+# Create the audit log directory here in the builder (distroless has no shell/mkdir).
+# uid/gid 65532 is the nonroot user in gcr.io/distroless/static-debian12:nonroot.
+RUN mkdir -p /var/log/tsm && chown 65532:65532 /var/log/tsm
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 
@@ -60,18 +69,16 @@ LABEL org.opencontainers.image.title="TSMv2 Data Plane"
 LABEL org.opencontainers.image.description="Sovereign AI firewall — single Rust binary"
 LABEL org.opencontainers.image.version="2.0.0"
 
-# Copy the binary
+# Copy the statically linked binary
 COPY --from=builder \
     /build/dataplane/target/x86_64-unknown-linux-musl/release/tsm-dataplane \
     /usr/local/bin/tsm-dataplane
 
-# Create audit log directory (writable by nonroot user 65532)
-USER root
-RUN mkdir -p /var/log/tsm && chown 65532:65532 /var/log/tsm
-USER 65532
+# Copy the pre-created audit log directory (owned by nonroot uid 65532)
+COPY --from=builder --chown=65532:65532 /var/log/tsm /var/log/tsm
 
 # ── Environment defaults ──────────────────────────────────────────────────────
-# All can be overridden at runtime via docker-compose or Kubernetes secrets.
+# All can be overridden at runtime via docker-compose environment or K8s secrets.
 
 ENV TSM_LISTEN="0.0.0.0:8080" \
     TSM_DETECTOR_URL="http://detector:8001" \
@@ -85,7 +92,10 @@ ENV TSM_LISTEN="0.0.0.0:8080" \
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/usr/local/bin/tsm-dataplane", "--health-check"] || exit 1
+# --health-check is handled by main() before any server startup —
+# it connects to the running instance at 127.0.0.1:8080 and exits 0/1.
+# No wget or shell required (distroless compatible).
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+    CMD ["/usr/local/bin/tsm-dataplane", "--health-check"]
 
 ENTRYPOINT ["/usr/local/bin/tsm-dataplane"]
