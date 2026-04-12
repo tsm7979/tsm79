@@ -19,6 +19,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import time
@@ -33,13 +34,16 @@ from typing import Any
 repo_root = Path(__file__).parent.parent
 sys.path.insert(0, str(repo_root))
 
-from detector.classifier import Classifier
+from detector.classifier  import Classifier
 from detector.policy_engine import PolicyEngine, PolicyRule
-from detector.alerting import alert_if_critical
-from detector.workspace import registry as workspace_registry
+from detector.alerting    import alert_if_critical
+from detector.workspace   import registry as workspace_registry
 from detector.risk_scorer import score_findings, severity_from_level
-from detector.sanitizer import Sanitizer
+from detector.sanitizer   import Sanitizer
 from detector.correlation import correlate, correlation_stats
+from detector.behavioral  import get_analyzer
+from detector.anomaly     import get_anomaly_detector
+from detector.semantic    import get_semantic_detector
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
@@ -114,13 +118,24 @@ class RuleRequest(BaseModel):
 
 @app.get("/health")
 def health():
+    sem = get_semantic_detector()
     return {
         "status":       "healthy",
         "service":      "TSM Detector",
         "version":      "2.0.0",
         "llm_assist":   bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")),
+        "semantic":     sem.available,
+        "isolation_forest": True,
         "correlation":  correlation_stats(),
+        "grpc_port":    int(os.environ.get("GRPC_PORT", 50051)),
     }
+
+@app.get("/behavioral/stats/{org_id}")
+def behavioral_stats(org_id: str):
+    """Return live velocity, exfiltration stats + Isolation Forest model info."""
+    stats  = get_analyzer().org_stats(org_id)
+    imodel = get_anomaly_detector().model_info(org_id)
+    return {**stats, "isolation_forest": imodel}
 
 @app.post("/detect", response_model=DetectResponse)
 async def detect(req: DetectRequest):
@@ -146,7 +161,18 @@ async def detect(req: DetectRequest):
     # ── Stage 4: spaCy NER — prose PII (names, addresses, orgs) ─────────
     ner_findings = classifier.ner_scan(text)
     if ner_findings:
-        scan.merge_structural(ner_findings)  # same merge path
+        scan.merge_structural(ner_findings)
+
+    # ── Stage 4b: Semantic embedding scan — context-aware PII ────────────────
+    # Catches medical/financial/adversarial context that regex cannot see.
+    # Runs in executor so it doesn't block the async event loop.
+    sem = get_semantic_detector()
+    if sem.available:
+        sem_findings = await asyncio.get_event_loop().run_in_executor(
+            None, sem.scan, text
+        )
+        if sem_findings:
+            scan.merge_structural(sem_findings)
 
     # ── Stage 5: CVSS-grounded risk scoring ──────────────────────────────────
     if scan.pii_types:
@@ -161,6 +187,24 @@ async def detect(req: DetectRequest):
     # ── Stage 6: Correlation — dedup and pattern elevation ───────────────────
     org_id = req.metadata.get("org_id", "default")
     _is_dup, final_risk_score, corr_count = correlate(org_id, scan.pii_types, final_risk_score)
+
+    # ── Stage 6b: Behavioral analysis — velocity / exfiltration / scanning ───
+    text_len = len(text)
+    analyzer = get_analyzer()
+    anomaly  = analyzer.observe_and_analyse(org_id, scan.pii_types, text_len)
+    if anomaly.is_anomalous:
+        behavioral_lift  = anomaly.composite_score * 20.0
+        final_risk_score = min(100.0, final_risk_score + behavioral_lift)
+
+    # ── Stage 6c: Isolation Forest — org-specific learned anomaly score ───────
+    # Queries the same backend events used by behavioral analysis.
+    iforest      = get_anomaly_detector()
+    vel_events   = analyzer._backend.query(f"behavioral:{org_id}", 60.0)
+    exfil_events = analyzer._backend.query(f"behavioral:{org_id}", 600.0)
+    iforest_score = iforest.observe(org_id, vel_events, exfil_events)
+    if iforest_score > 0.7:
+        # Only apply when well above the normal band (> 70th percentile anomaly)
+        final_risk_score = min(100.0, final_risk_score + iforest_score * 15.0)
 
     # ── Stage 7: Policy engine (workspace-isolated) ───────────────────────────
     workspace_id = req.metadata.get("workspace_id", "default")

@@ -1,0 +1,91 @@
+# TSMv2 — Sovereign AI Data Plane
+# Multi-stage build: compile Rust binary → minimal runtime image
+#
+# Stage 1: builder
+#   - Uses the official Rust toolchain on Debian Bookworm
+#   - Caches Cargo registry and compiled deps separately from source
+#   - Produces a statically linked binary (musl target)
+#
+# Stage 2: runtime
+#   - Distroless (no shell, no package manager, minimal attack surface)
+#   - Only the binary + audit log directory
+
+# ── Stage 1: Build ────────────────────────────────────────────────────────────
+
+FROM rust:1.78-bookworm AS builder
+
+WORKDIR /build
+
+# Install musl tools for static linking
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        musl-tools \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup target add x86_64-unknown-linux-musl
+
+# ── Dependency cache layer ────────────────────────────────────────────────────
+# Copy only manifest files first so Docker caches deps independently of source.
+COPY dataplane/Cargo.toml dataplane/Cargo.lock* ./dataplane/
+
+# Create a dummy main.rs to satisfy cargo
+RUN mkdir -p dataplane/src && echo 'fn main(){}' > dataplane/src/main.rs
+
+WORKDIR /build/dataplane
+
+# Download + compile dependencies (cached unless Cargo.toml changes)
+RUN cargo build --release --target x86_64-unknown-linux-musl 2>&1 | tail -5 || true
+
+# ── Full source build ─────────────────────────────────────────────────────────
+WORKDIR /build
+
+# Copy full source
+COPY dataplane/ ./dataplane/
+
+WORKDIR /build/dataplane
+
+# Force rebuild of our crate (dep cache is still valid)
+RUN touch src/main.rs && \
+    cargo build --release --target x86_64-unknown-linux-musl
+
+# Verify the binary exists and is statically linked
+RUN file target/x86_64-unknown-linux-musl/release/tsm-dataplane && \
+    ls -lh target/x86_64-unknown-linux-musl/release/tsm-dataplane
+
+# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
+
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+
+LABEL org.opencontainers.image.title="TSMv2 Data Plane"
+LABEL org.opencontainers.image.description="Sovereign AI firewall — single Rust binary"
+LABEL org.opencontainers.image.version="2.0.0"
+
+# Copy the binary
+COPY --from=builder \
+    /build/dataplane/target/x86_64-unknown-linux-musl/release/tsm-dataplane \
+    /usr/local/bin/tsm-dataplane
+
+# Create audit log directory (writable by nonroot user 65532)
+USER root
+RUN mkdir -p /var/log/tsm && chown 65532:65532 /var/log/tsm
+USER 65532
+
+# ── Environment defaults ──────────────────────────────────────────────────────
+# All can be overridden at runtime via docker-compose or Kubernetes secrets.
+
+ENV TSM_LISTEN="0.0.0.0:8080" \
+    TSM_DETECTOR_URL="http://detector:8001" \
+    TSM_DETECTOR_TIMEOUT_MS="5000" \
+    TSM_AUDIT_LOG="/var/log/tsm/audit.log" \
+    TSM_AUDIT_SECRET="change-me-in-production" \
+    TSM_POOL_MAX_IDLE="8" \
+    TSM_DETECTOR_FAILURE_MODE="allow" \
+    TSM_RATE_LIMIT="100" \
+    TSM_LOG_LEVEL="info"
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["/usr/local/bin/tsm-dataplane", "--health-check"] || exit 1
+
+ENTRYPOINT ["/usr/local/bin/tsm-dataplane"]

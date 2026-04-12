@@ -1,0 +1,95 @@
+// detect.proto — contract between the Rust dataplane and Python ML detector.
+//
+// The Rust dataplane calls DetectService for requests the fast-path
+// (regex + entropy + structural) cannot resolve with confidence.
+// Python is the ONLY place ML inference happens: Isolation Forest,
+// sentence-transformer embeddings, spaCy NER, LLM-assisted classification.
+//
+// Generate:
+//   Python:  python -m grpc_tools.protoc -I proto --python_out=detector/gen \
+//              --grpc_python_out=detector/gen proto/detect.proto
+//   Rust:    tonic-build via build.rs (see dataplane/build.rs)
+
+syntax = "proto3";
+
+package tsm.detect;
+
+option go_package = "github.com/tsm7979/tsm/proto/detect";
+
+// ── Request ────────────────────────────────────────────────────────────────
+
+message Message {
+  string role    = 1;   // "user" | "assistant" | "system"
+  string content = 2;
+}
+
+message DetectRequest {
+  string         model      = 1;   // e.g. "gpt-4o"
+  repeated Message messages = 2;   // full conversation turn
+  string         prompt     = 3;   // raw prompt (alternative to messages)
+  string         org_id     = 4;   // tenant identifier for per-org models
+  string         request_id = 5;   // trace correlation
+  map<string,string> metadata = 6; // passthrough fields (workspace_id, etc.)
+}
+
+// ── Response ───────────────────────────────────────────────────────────────
+
+enum DetectAction {
+  ALLOW       = 0;
+  REDACT      = 1;
+  BLOCK       = 2;
+  ROUTE_LOCAL = 3;
+}
+
+message Span {
+  int32  start     = 1;   // byte offset in original text
+  int32  end       = 2;
+  string pii_type  = 3;
+  string severity  = 4;
+  string layer     = 5;   // "regex" | "entropy" | "ner" | "semantic" | "llm"
+}
+
+message DetectResponse {
+  float          risk_score     = 1;   // 0–100
+  DetectAction   action         = 2;
+  repeated string pii_types     = 3;
+  string         severity       = 4;   // "none"|"low"|"medium"|"high"|"critical"
+  string         redacted_body  = 5;   // JSON string of sanitized request
+  repeated Span  spans          = 6;   // exact locations of flagged content
+  string         policy_rule    = 7;   // which policy rule fired
+  float          latency_ms     = 8;
+  float          anomaly_score  = 9;   // Isolation Forest score 0–1
+  repeated string behavioral_signals = 10; // ["velocity:42req/min (warn)", ...]
+}
+
+// ── Service ────────────────────────────────────────────────────────────────
+
+service DetectService {
+  // Unary RPC: one request → one response (used for non-streaming prompts)
+  rpc Detect(DetectRequest) returns (DetectResponse);
+
+  // Server-streaming: client sends one request, server streams incremental
+  // findings as each detection layer completes. Allows the Rust dataplane to
+  // start forwarding the redacted body before all layers finish.
+  rpc DetectStream(DetectRequest) returns (stream DetectResponse);
+}
+
+// ── Behavioral analysis ─────────────────────────────────────────────────────
+// Separate service so the dataplane can query org stats without a full detect.
+
+message BehavioralStatsRequest {
+  string org_id = 1;
+}
+
+message BehavioralStatsResponse {
+  string org_id       = 1;
+  int32  events_60s   = 2;
+  int32  events_10min = 3;
+  float  anomaly_score = 4;
+  string model_status  = 5;   // "warming_up" | "fitted"
+  int32  model_samples = 6;
+}
+
+service BehavioralService {
+  rpc GetStats(BehavioralStatsRequest) returns (BehavioralStatsResponse);
+}

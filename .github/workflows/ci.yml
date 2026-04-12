@@ -7,8 +7,78 @@ on:
     branches: [main]
 
 jobs:
+  # ── Python: ML detector unit tests ────────────────────────────────────────
+  test-behavioral:
+    name: "Python · behavioral analysis"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps (core + sklearn + redis client)
+        run: pip install -e ".[detector]" pytest pytest-timeout scikit-learn redis
+
+      - name: behavioral + state backends
+        run: pytest tests/test_behavioral.py -v --timeout=30
+
+  test-anomaly:
+    name: "Python · Isolation Forest anomaly detector"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps (sklearn required for non-skipped tests)
+        run: pip install -e ".[detector]" pytest pytest-timeout scikit-learn
+
+      - name: anomaly detector (IsolationForest + OrgModel)
+        run: pytest tests/test_anomaly.py -v --timeout=60
+
+  test-semantic:
+    name: "Python · semantic embedding detector"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps (no sentence-transformers — mock backend used in tests)
+        run: pip install -e ".[detector]" pytest pytest-timeout
+
+      - name: semantic detector (cosine, bank, mock backend)
+        run: pytest tests/test_semantic.py -v --timeout=30
+
+  test-correlation:
+    name: "Python · correlation engine"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps (redis client for mock tests)
+        run: pip install -e ".[detector]" pytest pytest-timeout redis
+
+      - name: correlation engine (memory + Redis mock)
+        run: pytest tests/test_correlation.py -v --timeout=30
+
+  # ── Python: existing unit + integration tests ──────────────────────────────
   test-python:
-    name: Python tests (unit + integration)
+    name: "Python · classifier + policy (3.10/3.11/3.12)"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -17,8 +87,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -35,14 +104,13 @@ jobs:
         timeout-minutes: 3
 
   test-e2e:
-    name: E2E tests (detector pipeline)
+    name: "Python · E2E detector pipeline"
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -55,21 +123,50 @@ jobs:
         run: pytest tests/test_e2e.py -v --timeout=60
         timeout-minutes: 5
 
-  test-typescript:
-    name: TypeScript typecheck + build
+  # ── Proto stub generation check ───────────────────────────────────────────
+  proto-gen:
+    name: "Proto · stub generation"
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install grpcio-tools
+        run: pip install grpcio-tools==1.62.2
+
+      - name: Generate Python stubs from detect.proto
+        run: |
+          python -m grpc_tools.protoc \
+            -I proto \
+            --python_out=detector/gen \
+            --grpc_python_out=detector/gen \
+            proto/detect.proto
+
+      - name: Verify stubs were produced
+        run: |
+          test -f detector/gen/detect_pb2.py
+          test -f detector/gen/detect_pb2_grpc.py
+          echo "Proto stubs OK"
+
+  # ── TypeScript ────────────────────────────────────────────────────────────
+  test-typescript:
+    name: "TypeScript · typecheck + build"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: proxy/package-lock.json
 
-      - name: Install proxy dependencies (all, including devDeps for tsc)
+      - name: Install proxy dependencies
         run: cd proxy && npm ci
 
       - name: TypeScript typecheck
@@ -78,15 +175,69 @@ jobs:
       - name: TypeScript compile (verify build succeeds)
         run: cd proxy && npx tsc
 
-  lint:
-    name: Lint + type annotations
+  # ── Rust dataplane ────────────────────────────────────────────────────────
+  test-rust-dataplane:
+    name: "Rust · dataplane (cargo test)"
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry + build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            dataplane/target
+          key: rust-${{ runner.os }}-${{ hashFiles('dataplane/Cargo.lock') }}
+          restore-keys: rust-${{ runner.os }}-
+
+      - name: Cargo fmt check
+        run: cd dataplane && cargo fmt -- --check
+
+      - name: Cargo clippy (no warnings)
+        run: cd dataplane && cargo clippy --all-targets -- -D warnings
+
+      - name: Cargo test (unit + doc tests)
+        run: cd dataplane && cargo test --lib -- --test-threads=4
+
+      - name: Cargo test (with grpc feature)
+        run: cd dataplane && cargo test --lib --features grpc -- --test-threads=4
+
+  # ── Go control plane ──────────────────────────────────────────────────────
+  test-go-control-plane:
+    name: "Go · control plane"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+          cache-dependency-path: control-plane/go.sum
+
+      - name: go vet
+        run: cd control-plane && go vet ./...
+
+      - name: go test (race detector)
+        run: cd control-plane && go test ./... -race -timeout 30s
+
+  # ── Lint ──────────────────────────────────────────────────────────────────
+  lint:
+    name: "Lint · ruff (Python)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -94,7 +245,22 @@ jobs:
         run: pip install ruff
 
       - name: Lint Python (errors + imports + style)
-        run: ruff check tsm/ detector/ sdk/ --select E,F,I,W --ignore E501
+        run: ruff check detector/ --select E,F,I,W --ignore E501
 
       - name: Format check
-        run: ruff format --check tsm/ detector/ sdk/
+        run: ruff format --check detector/
+
+  # ── Gate: all checks must pass ────────────────────────────────────────────
+  all-checks:
+    name: "Gate · all checks passed"
+    runs-on: ubuntu-latest
+    needs:
+      - test-behavioral
+      - test-anomaly
+      - test-semantic
+      - test-correlation
+      - test-python
+      - proto-gen
+      - lint
+    steps:
+      - run: echo "All required checks passed."

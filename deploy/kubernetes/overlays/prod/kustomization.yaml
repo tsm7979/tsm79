@@ -1,0 +1,65 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  # Scale detector to 4 replicas in prod
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 4
+    target:
+      kind: Deployment
+      name: tsm-detector
+
+  # Scale control plane to 3 replicas in prod
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+    target:
+      kind: Deployment
+      name: tsm-control-plane
+
+  # Production resource limits for dataplane
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "4000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "1Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "256Mi"
+    target:
+      kind: DaemonSet
+      name: tsm-dataplane
+
+  # Production log levels
+  - patch: |-
+      - op: replace
+        path: /data/TSM_LOG_LEVEL
+        value: "warn"
+      - op: replace
+        path: /data/TSM_CP_LOG_LEVEL
+        value: "warn"
+    target:
+      kind: ConfigMap
+      name: tsm-config
+
+images:
+  - name: tsm/dataplane
+    newTag: "1.0.0"
+  - name: tsm/detector
+    newTag: "1.0.0"
+  - name: tsm/control-plane
+    newTag: "1.0.0"
+
+commonLabels:
+  environment: production

@@ -1,0 +1,53 @@
+[package]
+name = "tsm-dataplane"
+version = "2.0.0"
+edition = "2021"
+description = "TSMv2 sovereign AI infrastructure data plane"
+
+[[bin]]
+name = "tsm-dataplane"
+path = "src/main.rs"
+
+[features]
+default = []
+# Enable typed gRPC transport to Python ML detector (replaces raw HTTP).
+# Requires protoc + tonic-build.  Build with: cargo build --features grpc
+grpc = ["tonic", "prost", "tokio"]
+
+[dependencies]
+# Raw syscall access for io_uring, epoll, BPF map interaction
+libc = "0.2"
+
+# AES-NI/ChaCha20 assembly routines + X25519 ECDH
+ring = "0.17"
+
+# JSON parsing/serialization for AI protocol bodies and detector responses
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# SIMD DFA regex engine with lookahead support
+regex = "1"
+
+# HMAC-SHA256 for the audit chain — constant-time safe
+hmac = "0.12"
+sha2 = "0.10"
+
+# gRPC client for the Python ML detector (feature-gated)
+# When enabled: typed calls replace raw HTTP; supports streaming detect results
+tonic  = { version = "0.11", optional = true }
+prost  = { version = "0.12", optional = true }
+tokio  = { version = "1",    optional = true, features = ["rt-multi-thread", "macros"] }
+
+[build-dependencies]
+# Only needed when `grpc` feature is enabled
+tonic-build = { version = "0.11", optional = true }
+
+[profile.release]
+opt-level     = 3
+lto           = true
+codegen-units = 1
+panic         = "abort"
+strip         = true
+
+[profile.dev]
+opt-level = 1   # faster compile, still debuggable

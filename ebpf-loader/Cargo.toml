@@ -1,0 +1,20 @@
+[package]
+name    = "tsm-ebpf-loader"
+version = "2.0.0"
+edition = "2021"
+description = "TSMv2 eBPF/XDP program loader — attaches ingress XDP + egress TC, exposes BPF map I/O via Unix socket"
+
+[[bin]]
+name = "tsm-ebpf-loader"
+path = "src/main.rs"
+
+[dependencies]
+# Raw syscall access for bpf(2), setsockopt, mmap — nothing else
+libc = "0.2"
+
+[profile.release]
+opt-level     = 3
+lto           = true
+codegen-units = 1
+panic         = "abort"
+strip         = true

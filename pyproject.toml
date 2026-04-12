@@ -32,12 +32,28 @@ detector = [
     "uvicorn[standard]>=0.29",
     "pydantic>=2.7",
     "spacy>=3.7.0",
+    "scikit-learn>=1.4",    # Isolation Forest anomaly detection
+    "redis>=5.0",           # distributed behavioral + correlation state
+]
+semantic = [
+    "sentence-transformers>=2.7",   # local all-MiniLM-L6-v2 (80MB, CPU-fast)
+]
+grpc = [
+    "grpcio>=1.62",
+    "grpcio-tools>=1.62",           # proto compilation
+    "grpcio-reflection>=1.62",      # service discovery
 ]
 all = [
     "fastapi>=0.111",
     "uvicorn[standard]>=0.29",
     "pydantic>=2.7",
     "spacy>=3.7.0",
+    "scikit-learn>=1.4",
+    "redis>=5.0",
+    "sentence-transformers>=2.7",
+    "grpcio>=1.62",
+    "grpcio-tools>=1.62",
+    "grpcio-reflection>=1.62",
 ]
 
 [project.urls]
