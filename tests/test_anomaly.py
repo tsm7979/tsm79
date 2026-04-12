@@ -90,7 +90,7 @@ class TestOrgModel:
         except ImportError:
             pytest.skip("sklearn not installed")
         m = _OrgModel(org_id="test")
-        for _ in range(_WARMUP_SAMPLES + _REFIT_INTERVAL):
+        for i in range(_WARMUP_SAMPLES + _REFIT_INTERVAL):
             m.append([float(i % 5)] * 10)
         assert m.should_refit()
 

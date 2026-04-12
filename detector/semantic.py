@@ -154,8 +154,12 @@ class SemanticDetector:
     Bank vectors are pre-computed once on first scan() call.
     """
 
-    def __init__(self) -> None:
-        self._backend    = _build_backend()
+    _AUTO = object()   # sentinel — distinguishes "not provided" from explicit None
+
+    def __init__(self, backend=_AUTO) -> None:
+        # Accept explicit backend for testing (including None to disable);
+        # use auto-detection only when no backend argument is provided.
+        self._backend    = _build_backend() if backend is SemanticDetector._AUTO else backend
         self._bank_vecs: list[list[float]] | None = None
         self._init_lock  = threading.Lock()
 

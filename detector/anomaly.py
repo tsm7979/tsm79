@@ -261,6 +261,7 @@ class _BackgroundRefitter:
         self._queue: list[_OrgModel] = []
         self._lock  = threading.Lock()
         self._event = threading.Event()
+        self._stop  = False
         t = threading.Thread(target=self._worker, daemon=True, name="tsm-anomaly-refit")
         t.start()
 
@@ -271,11 +272,21 @@ class _BackgroundRefitter:
                 self._queue.append(model)
         self._event.set()
 
+    def shutdown(self) -> None:
+        self._stop = True
+        self._event.set()
+
     def _worker(self) -> None:
-        while True:
-            self._event.wait()
+        # Use timeout so the thread exits cleanly on interpreter shutdown
+        # (blocking wait() causes Windows access violation on process exit).
+        while not self._stop:
+            triggered = self._event.wait(timeout=2.0)
+            if self._stop:
+                break
+            if not triggered:
+                continue
             self._event.clear()
-            while True:
+            while not self._stop:
                 with self._lock:
                     if not self._queue:
                         break
