@@ -20,15 +20,17 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 import time
+import threading
 from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Any
 
 # Ensure tsm package is importable (detector lives one level below repo root)
 repo_root = Path(__file__).parent.parent
@@ -45,6 +47,98 @@ from detector.behavioral  import get_analyzer
 from detector.anomaly     import get_anomaly_detector
 from detector.semantic    import get_semantic_detector
 
+# ── Config ────────────────────────────────────────────────────────────────────
+
+_DETECTOR_KEY  = os.environ.get("TSM_DETECTOR_KEY", "")   # empty = no auth
+_AUDIT_PATH    = Path(os.environ.get("AUDIT_LOG_PATH", "/tmp/tsm_audit.jsonl"))
+
+# ── Audit log ────────────────────────────────────────────────────────────────
+
+_audit_lock = threading.Lock()
+
+def _write_audit(record: dict) -> None:
+    """Append one JSON line to the audit log (thread-safe, fail-silent)."""
+    try:
+        with _audit_lock:
+            with _AUDIT_PATH.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record, separators=(",", ":")) + "\n")
+    except Exception:
+        pass  # never block the request path for audit I/O errors
+
+# ── Prometheus metrics ────────────────────────────────────────────────────────
+
+class _Metrics:
+    """Minimal thread-safe counters — no prometheus_client dependency required."""
+
+    def __init__(self) -> None:
+        self._lock       = threading.Lock()
+        self.requests    = 0
+        self.allowed     = 0
+        self.blocked     = 0
+        self.redacted    = 0
+        self.route_local = 0
+        self.errors      = 0
+        self._latencies: list[float] = []   # last 10 000 latency samples (ms)
+
+    def record(self, action: str, latency_ms: float) -> None:
+        with self._lock:
+            self.requests += 1
+            if action == "allow":
+                self.allowed += 1
+            elif action == "block":
+                self.blocked += 1
+            elif action == "redact":
+                self.redacted += 1
+            elif action == "route_local":
+                self.route_local += 1
+            self._latencies.append(latency_ms)
+            if len(self._latencies) > 10_000:
+                self._latencies = self._latencies[-10_000:]
+
+    def record_error(self) -> None:
+        with self._lock:
+            self.requests += 1
+            self.errors   += 1
+
+    def prometheus_text(self) -> str:
+        with self._lock:
+            lat  = sorted(self._latencies) if self._latencies else [0.0]
+            p50  = lat[int(len(lat) * 0.50)]
+            p95  = lat[int(len(lat) * 0.95)]
+            p99  = lat[int(len(lat) * 0.99)]
+            lines = [
+                "# HELP tsm_requests_total Total detect requests",
+                "# TYPE tsm_requests_total counter",
+                f"tsm_requests_total {self.requests}",
+                "# HELP tsm_allowed_total Requests allowed through",
+                "# TYPE tsm_allowed_total counter",
+                f"tsm_allowed_total {self.allowed}",
+                "# HELP tsm_blocked_total Requests blocked by policy",
+                "# TYPE tsm_blocked_total counter",
+                f"tsm_blocked_total {self.blocked}",
+                "# HELP tsm_redacted_total Requests with PII redacted",
+                "# TYPE tsm_redacted_total counter",
+                f"tsm_redacted_total {self.redacted}",
+                "# HELP tsm_route_local_total Requests routed to local model",
+                "# TYPE tsm_route_local_total counter",
+                f"tsm_route_local_total {self.route_local}",
+                "# HELP tsm_errors_total Internal errors during detection",
+                "# TYPE tsm_errors_total counter",
+                f"tsm_errors_total {self.errors}",
+                "# HELP tsm_detect_latency_ms_p50 Latency p50 (ms)",
+                "# TYPE tsm_detect_latency_ms_p50 gauge",
+                f"tsm_detect_latency_ms_p50 {p50:.2f}",
+                "# HELP tsm_detect_latency_ms_p95 Latency p95 (ms)",
+                "# TYPE tsm_detect_latency_ms_p95 gauge",
+                f"tsm_detect_latency_ms_p95 {p95:.2f}",
+                "# HELP tsm_detect_latency_ms_p99 Latency p99 (ms)",
+                "# TYPE tsm_detect_latency_ms_p99 gauge",
+                f"tsm_detect_latency_ms_p99 {p99:.2f}",
+            ]
+        return "\n".join(lines) + "\n"
+
+_metrics = _Metrics()
+
 # ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
@@ -60,6 +154,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Auth middleware ───────────────────────────────────────────────────────────
+
+_OPEN_PATHS = {"/health", "/metrics", "/docs", "/openapi.json"}
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    """
+    When TSM_DETECTOR_KEY is set, all endpoints except /health and /metrics
+    require Authorization: Bearer <key> or X-TSM-Key: <key>.
+    Returns 401 on missing/wrong key — never exposes the reason in the body.
+    """
+    if _DETECTOR_KEY and request.url.path not in _OPEN_PATHS:
+        auth   = request.headers.get("Authorization", "")
+        tsm_hdr = request.headers.get("X-TSM-Key", "")
+        token  = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else ""
+        if token != _DETECTOR_KEY and tsm_hdr != _DETECTOR_KEY:
+            return Response(
+                content='{"error":{"code":"unauthorized","message":"Invalid or missing API key"}}',
+                status_code=401,
+                media_type="application/json",
+            )
+    return await call_next(request)
 
 classifier    = Classifier()
 policy_engine = PolicyEngine()
@@ -128,7 +245,13 @@ def health():
         "isolation_forest": True,
         "correlation":  correlation_stats(),
         "grpc_port":    int(os.environ.get("GRPC_PORT", 50051)),
+        "auth_enabled": bool(_DETECTOR_KEY),
     }
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus-compatible text metrics for Grafana scraping."""
+    return Response(content=_metrics.prometheus_text(), media_type="text/plain; version=0.0.4")
 
 @app.get("/behavioral/stats/{org_id}")
 def behavioral_stats(org_id: str):
@@ -138,7 +261,15 @@ def behavioral_stats(org_id: str):
     return {**stats, "isolation_forest": imodel}
 
 @app.post("/detect", response_model=DetectResponse)
-async def detect(req: DetectRequest):
+async def detect(req: DetectRequest):  # noqa: C901
+    try:
+        return await _detect_impl(req)
+    except Exception as exc:
+        _metrics.record_error()
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+async def _detect_impl(req: DetectRequest) -> DetectResponse:
     t0 = time.time()
 
     # Extract full text for analysis
@@ -227,6 +358,23 @@ async def detect(req: DetectRequest):
 
     latency    = (time.time() - t0) * 1000
     request_id = req.metadata.get("request_id", "unknown")
+
+    # ── Metrics ────────────────────────────────────────────────────────────────
+    _metrics.record(policy_result.action, latency)
+
+    # ── Audit log ──────────────────────────────────────────────────────────────
+    _write_audit({
+        "ts":         time.time(),
+        "request_id": request_id,
+        "org_id":     org_id,
+        "model":      req.model,
+        "action":     policy_result.action,
+        "pii_types":  scan.pii_types,
+        "risk_score": round(final_risk_score, 2),
+        "severity":   final_severity,
+        "rule":       policy_result.rule_name,
+        "latency_ms": round(latency, 2),
+    })
 
     # Fire webhook for critical events (non-blocking)
     if policy_result.action in ("block", "route_local") or final_risk_score >= 80:

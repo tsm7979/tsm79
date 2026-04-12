@@ -250,6 +250,24 @@ jobs:
       - name: Format check
         run: ruff format --check detector/
 
+  # ── Python: detector service (auth, metrics, audit) ──────────────────────
+  test-detector-service:
+    name: "Python · detector service (auth + metrics + audit)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps (fastapi + httpx for TestClient)
+        run: pip install -e ".[detector]" pytest fastapi httpx
+
+      - name: detector service tests (auth middleware, /metrics, audit log)
+        run: pytest tests/test_detector_service.py -v
+
   # ── Gate: all checks must pass ────────────────────────────────────────────
   all-checks:
     name: "Gate · all checks passed"
@@ -260,6 +278,7 @@ jobs:
       - test-semantic
       - test-correlation
       - test-python
+      - test-detector-service
       - proto-gen
       - lint
     steps:
