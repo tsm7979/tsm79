@@ -364,9 +364,10 @@ impl H2Conn {
             return H2Event::NeedMore; // wait for CONTINUATION
         }
 
-        let fragment_bytes = std::mem::take(
-            &mut self.streams.get_mut(&sid).unwrap().pending_headers
-        );
+        let fragment_bytes = match self.streams.get_mut(&sid) {
+            Some(s) => std::mem::take(&mut s.pending_headers),
+            None => return H2Event::Error { code: ERR_STREAM_CLOSED, msg: "stream vanished before HEADERS complete" },
+        };
         match self.hpack.decode(&fragment_bytes) {
             Ok(headers) => {
                 if end_stream {
@@ -469,9 +470,10 @@ impl H2Conn {
         }
 
         self.continuation_sid = 0;
-        let fragment_bytes = std::mem::take(
-            &mut self.streams.get_mut(&sid).unwrap().pending_headers
-        );
+        let fragment_bytes = match self.streams.get_mut(&sid) {
+            Some(s) => std::mem::take(&mut s.pending_headers),
+            None => return H2Event::Error { code: ERR_STREAM_CLOSED, msg: "stream vanished before CONTINUATION complete" },
+        };
         match self.hpack.decode(&fragment_bytes) {
             Ok(headers) => H2Event::Headers {
                 stream_id: sid,

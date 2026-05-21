@@ -141,6 +141,21 @@ impl AuditLog {
         Ok(entry)
     }
 
+    /// Return (prev_hash, current_hash) for the most recent entry.
+    /// Used by the PostgreSQL audit sink to populate HMAC chain fields.
+    pub fn last_hashes(&self) -> (String, String) {
+        let guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        // prev_hash is the hash of the most recent entry; entry_hash is not tracked separately
+        // We return (prev_prev_hash, prev_hash) — caller uses as (prev_hash, entry_hash) for next row
+        let genesis = "0000000000000000000000000000000000000000000000000000000000000000".to_owned();
+        if guard.seq == 0 {
+            (genesis.clone(), genesis)
+        } else {
+            // prev_hash field already advanced to the latest committed hash
+            (genesis, guard.prev_hash.clone())
+        }
+    }
+
     /// Verify the integrity of the on-disk chain starting from `path`.
     /// Returns `Ok(count)` if all `count` entries are valid, or an error
     /// describing which entry failed and why.

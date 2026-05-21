@@ -14,28 +14,87 @@ mod detect;
 mod policy;
 mod route;
 mod pool;
+mod store;
 mod http;
 mod ai;
 mod tls;
 mod io;
 mod pipeline;
 mod telemetry;
+mod tproxy;
+// ClickHouse ingestor — shared across crate via #[path] include
+#[path = "../../observability/clickhouse/ingestor.rs"]
+pub mod ingest;
 
 use std::net::TcpListener;
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 extern crate libc;
 
 use config::Config;
-use audit::AuditLog;
+use audit::{AuditLog, AuditSink};
 use pool::ConnPool;
 use policy::PolicyEngine;
 use route::BalancerRegistry;
 use pipeline::RateLimiter;
 #[allow(unused_imports)]
 use io::{set_nonblocking, set_reuseaddr, set_nodelay};
+
+// Structured logging macros — defined in telemetry.rs, available crate-wide
+#[allow(unused_imports)]
+use crate::{log_info, log_warn, log_error, log_debug};
+
+// ── Concurrency semaphore ─────────────────────────────────────────────────────
+//
+// Limits the number of OS threads that can be inside handle_connection()
+// simultaneously.  When the ceiling is hit the accept loop applies TCP
+// backpressure naturally: the kernel's accept queue fills (SYN_RECV), the
+// client sees its TCP window shrink, and flows slow down instead of crashing
+// the process with OOM.
+//
+// Ceiling derivation:
+//   Each in-flight connection holds ~1–4 MB of stack + heap (8192 Rust
+//   default stack + HTTP body buffer + upstream conn guard).
+//   At 2 GB headroom: 2048 MB / 2 MB avg ≈ 1024 safe concurrent threads.
+//   We default to 512 (configured via TSM_MAX_CONNECTIONS).
+
+pub struct ConnSemaphore {
+    count:   Mutex<usize>,
+    ceiling: usize,
+    cv:      std::sync::Condvar,
+}
+
+impl ConnSemaphore {
+    pub fn new(ceiling: usize) -> Arc<Self> {
+        Arc::new(ConnSemaphore {
+            count:   Mutex::new(0),
+            ceiling,
+            cv:      std::sync::Condvar::new(),
+        })
+    }
+
+    /// Block until a slot is available, then take it.
+    pub fn acquire(&self) {
+        let mut count = self.count.lock().unwrap();
+        while *count >= self.ceiling {
+            count = self.cv.wait(count).unwrap();
+        }
+        *count += 1;
+    }
+
+    /// Release a previously acquired slot.
+    pub fn release(&self) {
+        let mut count = self.count.lock().unwrap();
+        if *count > 0 { *count -= 1; }
+        self.cv.notify_one();
+    }
+
+    pub fn active(&self) -> usize {
+        *self.count.lock().unwrap()
+    }
+}
 
 // ── Health check (used by Docker HEALTHCHECK CMD) ────────────────────────────
 
@@ -87,11 +146,46 @@ fn main() {
 
     print_banner(&config);
 
-    // ── Audit log ─────────────────────────────────────────────────────────────
+    // Emit structured startup event to stdout (picked up by container log drivers)
+    log_info!("main", "startup";
+        "version"       => env!("CARGO_PKG_VERSION"),
+        "listen"        => config.listen_addr.to_string(),
+        "detector_url"  => &config.detector_url,
+        "rate_rpm"      => config.rate_limit,
+        "audit_path"    => &config.audit_log_path
+    );
+
+    // ── Audit log (JSONL tamper-evident chain) ────────────────────────────────
     let audit = Arc::new(
         AuditLog::open(&config.audit_log_path, &config.audit_secret)
             .expect("failed to open audit log"),
     );
+
+    // ── Audit sink (PostgreSQL + Kafka — optional, no-op when unconfigured) ──
+    let pg_sink: Option<Arc<AuditSink>> = if !config.pg_dsn.is_empty() || !config.kafka_brokers.is_empty() {
+        let brokers = if config.kafka_brokers.is_empty() {
+            None
+        } else {
+            Some(config.kafka_brokers.clone())
+        };
+        // Override env vars for the sink if needed
+        if !config.pg_dsn.is_empty() {
+            std::env::set_var("TSM_PG_DSN", &config.pg_dsn);
+        }
+        match audit::start_pg_sink(brokers) {
+            Some(sink) => {
+                log_info!("main", "audit sink started"; "pg" => !config.pg_dsn.is_empty(), "kafka" => !config.kafka_brokers.is_empty());
+                Some(Arc::new(sink))
+            }
+            None => {
+                log_warn!("main", "audit sink not started — TSM_PG_DSN not set; using JSONL only");
+                None
+            }
+        }
+    } else {
+        log_info!("main", "audit sink disabled — set TSM_PG_DSN or TSM_KAFKA_BROKERS to enable");
+        None
+    };
 
     // ── Connection pool ───────────────────────────────────────────────────────
     let pool = Arc::new(ConnPool::new(config.pool_max_idle));
@@ -106,6 +200,68 @@ fn main() {
     // ── Rate limiter ──────────────────────────────────────────────────────────
     let rate_limiter = Arc::new(RateLimiter::new(config.rate_limit));
 
+    // ── Distributed state (Redis if REDIS_URL set, else in-memory) ────────────
+    // Replaces single-node in-memory SessionRouter + RateLimiter for horizontal
+    // scaling: all nodes share session pins and rate counters via Redis.
+    let distributed_state = Arc::new(store::from_env());
+    log_info!("main", "distributed state backend";
+        "backend" => distributed_state.backend_name()
+    );
+
+    // ── Session router (deterministic conversation pinning) ───────────────────
+    let session_router = Arc::new(route::SessionRouter::new());
+
+    // ── Merkle audit chain (tamper-evident epoch-based log) ───────────────────
+    let merkle_chain = Arc::new(std::sync::Mutex::new(audit::MerkleAuditChain::new()));
+    {
+        // Register a shutdown hook to flush the open epoch on process exit.
+        // SIGTERM handlers on Linux; on Windows this is best-effort.
+        let mc = merkle_chain.clone();
+        std::panic::set_hook(Box::new(move |_| {
+            if let Ok(mut chain) = mc.lock() {
+                chain.flush();
+                eprintln!("[merkle] flushed on panic; chain root: {}", chain.chain_root_hex());
+            }
+        }));
+    }
+
+    // ── ClickHouse ingestor (optional — no-op if TSM_CLICKHOUSE_URL not set) ───
+    // Batches audit events into ClickHouse for production observability:
+    // 100M events/day, materialized views, 90-day hot retention.
+    // Non-blocking: `ingest()` is a try_send() into a bounded MPSC channel.
+    let ch_ingestor: Option<Arc<ingest::ClickHouseIngestor>> = {
+        let url = std::env::var("TSM_CLICKHOUSE_URL").unwrap_or_default();
+        if url.is_empty() {
+            log_info!("main", "ClickHouse ingestor disabled — set TSM_CLICKHOUSE_URL to enable");
+            None
+        } else {
+            let node_id = config.node_id.clone();
+            let ingestor = ingest::ClickHouseIngestor::start(
+                &url,
+                "tsm",
+                10_000,   // batch_size: up to 10K events per POST
+                500,      // flush_ms:   flush at least every 500ms
+                100_000,  // buffer_cap: drop oldest beyond 100K queued
+                node_id,
+            );
+            log_info!("main", "ClickHouse ingestor started"; "url" => &url);
+            Some(ingestor)
+        }
+    };
+
+    // ── TPROXY mode detection ─────────────────────────────────────────────────
+    let tproxy_mode = tproxy::tproxy_mode_enabled(&config.listen_addr);
+
+    // ── Connection concurrency ceiling ────────────────────────────────────────
+    // Prevents unbounded thread spawning under sudden load spikes.
+    // Excess connections are held in the kernel's SYN queue (natural backpressure)
+    // rather than spawning a thread that will OOM the process.
+    let max_conn: usize = std::env::var("TSM_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(512);
+    let conn_sem = ConnSemaphore::new(max_conn);
+
     // ── Balancer registry (for health checker) ────────────────────────────────
     let registry = Arc::new(BalancerRegistry::new());
     let _health_handle = pool::start_health_checker(registry.clone());
@@ -117,10 +273,14 @@ fn main() {
     set_reuseaddr(listener.as_raw_fd())
         .unwrap_or_else(|e| eprintln!("[main] SO_REUSEADDR failed: {}", e));
 
-    eprintln!("[main] listening on {}", config.listen_addr);
+    log_info!("main", "listening";
+        "addr"     => config.listen_addr,
+        "max_conn" => max_conn,
+        "rate_rpm" => config.rate_limit
+    );
 
     // ── Accept loop ───────────────────────────────────────────────────────────
-    accept_loop(listener, config, pool, audit, policy, rate_limiter);
+    accept_loop(listener, config, pool, audit, pg_sink, policy, rate_limiter, distributed_state, session_router, merkle_chain, ch_ingestor, conn_sem, tproxy_mode);
 }
 
 // ── Accept loop ───────────────────────────────────────────────────────────────
@@ -132,46 +292,70 @@ fn main() {
 /// *within-connection* concurrency for multiplexed HTTP/2 streams in a future
 /// iteration; the connection granularity is coarse enough that OS threads work.
 fn accept_loop(
-    listener:     TcpListener,
-    config:       Arc<Config>,
-    pool:         Arc<ConnPool>,
-    audit:        Arc<AuditLog>,
-    policy:       Arc<PolicyEngine>,
-    rate_limiter: Arc<RateLimiter>,
+    listener:          TcpListener,
+    config:            Arc<Config>,
+    pool:              Arc<ConnPool>,
+    audit:             Arc<AuditLog>,
+    pg_sink:           Option<Arc<AuditSink>>,
+    policy:            Arc<PolicyEngine>,
+    rate_limiter:      Arc<RateLimiter>,
+    distributed_state: Arc<dyn store::DistributedState>,
+    session_router:    Arc<route::SessionRouter>,
+    merkle_chain:      Arc<std::sync::Mutex<audit::MerkleAuditChain>>,
+    ch_ingestor:       Option<Arc<ingest::ClickHouseIngestor>>,
+    conn_sem:          Arc<ConnSemaphore>,
+    tproxy_mode:       bool,
 ) {
     loop {
         let (stream, peer) = match listener.accept() {
             Ok(pair) => pair,
             Err(e) => {
-                eprintln!("[accept] error: {}", e);
+                log_warn!("accept", "accept error"; "err" => e);
                 std::thread::sleep(Duration::from_millis(10));
                 continue;
             }
         };
 
-        if config.log_level == "debug" {
-            eprintln!("[accept] new connection from {}", peer);
-        }
+        // ── Backpressure: block here if at the concurrency ceiling ────────────
+        conn_sem.acquire();
 
-        // Configure TCP options on the accepted socket
+        log_debug!("accept", "connection accepted";
+            "peer"       => peer,
+            "active"     => conn_sem.active()
+        );
+
         let fd: RawFd = {
             let raw = stream.as_raw_fd();
             let _ = set_nodelay(raw);
             stream.into_raw_fd()
         };
 
-        // Clone Arcs for the worker thread
-        let config2       = config.clone();
-        let pool2         = pool.clone();
-        let audit2        = audit.clone();
-        let policy2       = policy.clone();
-        let rate_limiter2 = rate_limiter.clone();
+        // ── TPROXY: recover original destination before thread spawn ──────────
+        // getsockopt(SO_ORIGINAL_DST) must be called before any read() on the fd.
+        let conn_ctx = tproxy::ConnContext::from_fd(fd, tproxy_mode);
+        if tproxy_mode && conn_ctx.original_dst.is_some() {
+            log_debug!("accept", "tproxy intercepted";
+                "original_dst" => format!("{:?}", conn_ctx.original_dst),
+                "upstream_hint" => conn_ctx.upstream_hint.unwrap_or("unknown")
+            );
+        }
 
-        // Spawn worker thread for this connection
+        let config2            = config.clone();
+        let pool2              = pool.clone();
+        let audit2             = audit.clone();
+        let pg_sink2           = pg_sink.clone();
+        let policy2            = policy.clone();
+        let rate_limiter2      = rate_limiter.clone();
+        let distributed_state2 = distributed_state.clone();
+        let session_router2    = session_router.clone();
+        let merkle_chain2      = merkle_chain.clone();
+        let ch_ingestor2       = ch_ingestor.clone();
+        let sem2               = conn_sem.clone();
+
         match std::thread::Builder::new()
             .name(format!("tsm-conn-{}", peer))
+            .stack_size(2 * 1024 * 1024) // 2 MB stack (default 8 MB wastes memory)
             .spawn(move || {
-                // keep-alive loop: one thread handles multiple pipelined requests
                 let mut keep_alive = true;
                 while keep_alive {
                     keep_alive = pipeline::handle_connection(
@@ -181,13 +365,20 @@ fn accept_loop(
                         audit2.clone(),
                         policy2.clone(),
                         rate_limiter2.clone(),
+                        pg_sink2.clone(),
+                        distributed_state2.clone(),
+                        session_router2.clone(),
+                        merkle_chain2.clone(),
+                        ch_ingestor2.clone(),
+                        conn_ctx.clone(),
                     );
                 }
-                // fd is closed by pipeline when it returns false
+                sem2.release(); // return slot AFTER last request on this conn
             }) {
-            Ok(_handle) => { /* thread is running */ }
+            Ok(_handle) => {}
             Err(e) => {
-                eprintln!("[accept] thread spawn failed: {}", e);
+                log_error!("accept", "thread spawn failed"; "err" => e);
+                conn_sem.release(); // must release if thread never ran
                 unsafe { libc::close(fd); }
             }
         }
@@ -197,12 +388,16 @@ fn accept_loop(
 // ── Banner ────────────────────────────────────────────────────────────────────
 
 fn print_banner(config: &Config) {
+    let pg_status    = if config.pg_dsn.is_empty()       { "disabled" } else { "enabled" };
+    let kafka_status = if config.kafka_brokers.is_empty() { "disabled" } else { "enabled" };
     eprintln!("╔══════════════════════════════════════════════════════════╗");
     eprintln!("║      TSMv2 — Sovereign AI Data Plane  (Rust)            ║");
     eprintln!("╠══════════════════════════════════════════════════════════╣");
     eprintln!("║  listen   : {:<44} ║", config.listen_addr);
     eprintln!("║  detector : {:<44} ║", config.detector_url);
     eprintln!("║  audit    : {:<44} ║", config.audit_log_path);
+    eprintln!("║  pg sink  : {:<44} ║", pg_status);
+    eprintln!("║  kafka    : {:<44} ║", kafka_status);
     eprintln!("║  pool     : {} idle/upstream{:<29} ║", config.pool_max_idle, "");
     eprintln!("║  on error : {:?}{:<43} ║", config.detector_failure_mode, "");
     eprintln!("╚══════════════════════════════════════════════════════════╝");

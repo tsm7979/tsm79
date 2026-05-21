@@ -49,6 +49,20 @@ pub struct Config {
 
     /// Node ID for control-plane registration.  Defaults to hostname.
     pub node_id: String,
+
+    /// PostgreSQL DSN for audit writes.  Empty = disabled.
+    /// Format: "host=localhost port=5432 dbname=tsm user=tsm password=secret"
+    pub pg_dsn: String,
+
+    /// Kafka bootstrap brokers for audit event streaming.  Empty = disabled.
+    /// Format: "broker1:9092,broker2:9092"
+    pub kafka_brokers: String,
+
+    /// Workspace ID sent with every audit event (UUID).
+    pub workspace_id: String,
+
+    /// Org ID sent with every audit event (UUID).
+    pub org_id: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -109,6 +123,11 @@ impl Config {
                     .or_else(|_| std::env::var("COMPUTERNAME"))
                     .unwrap_or_else(|_| "tsm-dataplane".to_owned())
             }),
+
+            pg_dsn:       env_str("TSM_PG_DSN",      ""),
+            kafka_brokers: env_str("TSM_KAFKA_BROKERS", ""),
+            workspace_id: env_str("TSM_WORKSPACE_ID", "00000000-0000-0000-0000-000000000002"),
+            org_id:       env_str("TSM_ORG_ID",       "00000000-0000-0000-0000-000000000001"),
         }
     }
 

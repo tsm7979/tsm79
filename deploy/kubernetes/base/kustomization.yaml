@@ -10,6 +10,11 @@ resources:
   - dataplane.yaml
   - detector.yaml
   - control-plane.yaml
+  - threat-intel.yaml
+  - ebpf-daemonset.yaml
+  - clickhouse.yaml
+  - network-policy.yaml
+  - cilium-l7-policy.yaml
 
 commonLabels:
   app.kubernetes.io/managed-by: kustomize

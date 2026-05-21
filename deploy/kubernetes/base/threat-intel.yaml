@@ -1,0 +1,100 @@
+---
+# threat-intel: Go service polling CVE/NVD, CISA KEV, AbuseIPDB, OTX,
+# Tor exit nodes, VPN CIDRs, and MITRE ATT&CK → writes to Redis.
+# The Rust dataplane reads IP reputation + blocklist from Redis.
+# The eBPF XDP loader reads tsm:xdp:blocklist to drop at NIC level.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-threat-intel
+  namespace: tsm
+  labels:
+    app: tsm-threat-intel
+    app.kubernetes.io/component: threat-intel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tsm-threat-intel
+  template:
+    metadata:
+      labels:
+        app: tsm-threat-intel
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "9100"
+        prometheus.io/path:   "/metrics"
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: threat-intel
+          image: tsm/threat-intel:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9100
+              protocol: TCP
+          env:
+            - name: TSM_REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tsm-secrets
+                  key: redis-url
+            - name: TSM_NVD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tsm-secrets
+                  key: nvd-api-key
+                  optional: true
+            - name: TSM_ABUSEIPDB_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tsm-secrets
+                  key: abuseipdb-key
+                  optional: true
+            - name: TSM_OTX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tsm-secrets
+                  key: otx-api-key
+                  optional: true
+            - name: TSM_LISTEN_ADDR
+              value: ":9100"
+            - name: TSM_LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "128Mi"
+            limits:
+              cpu:    "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9100
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9100
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: threat-intel-svc
+  namespace: tsm
+  labels:
+    app: tsm-threat-intel
+spec:
+  selector:
+    app: tsm-threat-intel
+  ports:
+    - name: http
+      port: 9100
+      targetPort: 9100
+  type: ClusterIP

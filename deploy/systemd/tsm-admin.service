@@ -1,0 +1,38 @@
+[Unit]
+Description=TSM Enterprise Admin API (Java Spring Boot)
+Documentation=https://github.com/tsm79/tsm79
+After=network-online.target postgresql.service
+Wants=network-online.target
+PartOf=tsm.target
+
+[Service]
+Type=simple
+User=tsm
+Group=tsm
+
+ExecStart=/usr/bin/java \
+    -jar /usr/local/lib/tsm/admin-api.jar \
+    --spring.config.location=/etc/tsm/admin-api.yml
+
+EnvironmentFile=/etc/tsm/admin-api.env
+
+# JVM tuning for G1GC (Java 21)
+Environment=JAVA_OPTS=-XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Xms256m -Xmx1g -XX:+HeapDumpOnOutOfMemoryError
+
+Restart=on-failure
+RestartSec=10s
+StartLimitIntervalSec=180s
+StartLimitBurst=3
+
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+LimitNOFILE=32768
+MemoryMax=2G
+
+TimeoutStartSec=60s
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target tsm.target

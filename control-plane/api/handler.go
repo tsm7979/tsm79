@@ -16,6 +16,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -27,6 +28,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/tsm7979/tsm/control-plane/cluster"
 	"github.com/tsm7979/tsm/control-plane/policy"
+	"github.com/tsm7979/tsm/control-plane/queue"
+	"github.com/tsm7979/tsm/control-plane/suggestion"
 )
 
 // ── Prometheus metrics ────────────────────────────────────────────────────────
@@ -52,13 +55,16 @@ var (
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 type Handler struct {
-	store    *policy.Store
-	registry *cluster.Registry
-	mux      *http.ServeMux
+	store       *policy.Store
+	registry    *cluster.Registry
+	queue       *queue.Tracker
+	suggestions *suggestion.Store
+	signer      *policy.Signer // may be nil if key generation failed at startup
+	mux         *http.ServeMux
 }
 
-func New(store *policy.Store, reg *cluster.Registry) *Handler {
-	h := &Handler{store: store, registry: reg, mux: http.NewServeMux()}
+func New(store *policy.Store, reg *cluster.Registry, q *queue.Tracker, sug *suggestion.Store, signer *policy.Signer) *Handler {
+	h := &Handler{store: store, registry: reg, queue: q, suggestions: sug, signer: signer, mux: http.NewServeMux()}
 	h.routes()
 	return h
 }
@@ -78,12 +84,21 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("/config/policy", h.handlePolicy)
 	h.mux.HandleFunc("/config/policy/history", h.handlePolicyHistory)
 	h.mux.HandleFunc("/config/policy/rules", h.handleRulePatch)
-	h.mux.HandleFunc("/config/policy/rules/", h.handleRuleDelete) // DELETE /config/policy/rules/{name}
+	h.mux.HandleFunc("/config/policy/rules/", h.handleRuleDelete)
+
+	// Human-in-the-loop suggestions
+	h.mux.HandleFunc("/config/policy/suggestions", h.handleSuggestions)
+	h.mux.HandleFunc("/config/policy/suggestions/", h.handleSuggestionAction)
 
 	// Cluster nodes
 	h.mux.HandleFunc("/nodes", h.handleNodes)
 	h.mux.HandleFunc("/nodes/register", h.handleNodeRegister)
-	h.mux.HandleFunc("/nodes/", h.handleNodeAction) // /nodes/{id} and /nodes/{id}/policy-ack
+	h.mux.HandleFunc("/nodes/", h.handleNodeAction)
+
+	// Priority queue admission control
+	h.mux.HandleFunc("/queue/stats", h.handleQueueStats)
+	h.mux.HandleFunc("/queue/admit", h.handleQueueAdmit)
+	h.mux.HandleFunc("/queue/admit/", h.handleQueueRelease)
 }
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -121,6 +136,15 @@ func (h *Handler) handlePolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("ETag", fmt.Sprintf("%d", snap.Version))
 		w.Header().Set("Cache-Control", "no-cache")
+		// Sign the snapshot so dataplanes can verify authenticity before applying.
+		if h.signer != nil {
+			if sig, err := h.signer.Sign(snap); err == nil {
+				w.Header().Set("X-TSM-Policy-Signature", sig)
+				w.Header().Set("X-TSM-Policy-PubKey", h.signer.PubB64)
+			} else {
+				slog.Warn("policy signer: failed to sign snapshot", "err", err)
+			}
+		}
 		jsonOK(w, snap)
 
 	case http.MethodPut:
@@ -262,6 +286,163 @@ func (h *Handler) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		jsonErr(w, http.StatusNotFound, "unknown node action")
+	}
+}
+
+// ── Priority queue ────────────────────────────────────────────────────────────
+
+// GET /queue/stats — point-in-time snapshot of active slots and limits per tier.
+func (h *Handler) handleQueueStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonErr(w, http.StatusMethodNotAllowed, "use GET")
+		return
+	}
+	jsonOK(w, h.queue.Stats())
+}
+
+// POST /queue/admit — acquire an admission slot before forwarding to upstream.
+//
+// Request body (optional):
+//   {"tier": "gold"|"silver"|"bronze"}
+//
+// The X-TSM-Priority header is also checked (body takes precedence).
+//
+// Response (201 Created):
+//   {"slot_id":"slot-42","tier":"silver","admitted_at":"..."}
+//
+// Response (429 Too Many Requests) when tier is at capacity.
+func (h *Handler) handleQueueAdmit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonErr(w, http.StatusMethodNotAllowed, "use POST")
+		return
+	}
+	// Determine tier from body or header
+	tierStr := r.Header.Get("X-TSM-Priority")
+	var body struct {
+		Tier string `json:"tier"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.Tier != "" {
+		tierStr = body.Tier
+	}
+	tier := queue.ParseTier(tierStr)
+
+	slot, err := h.queue.Admit(tier)
+	if err != nil {
+		jsonErr(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	jsonOK(w, slot)
+}
+
+// DELETE /queue/admit/{slot_id} — release an admission slot after forwarding completes.
+func (h *Handler) handleQueueRelease(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		jsonErr(w, http.StatusMethodNotAllowed, "use DELETE")
+		return
+	}
+	// Slot is self-releasing via the Slot.Release() method held by the caller.
+	// This endpoint is a semantic no-op from the server's perspective (the
+	// in-memory slot handle is owned by the requester), but it's exposed for
+	// completeness and future persistent-slot implementations.
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ── Human-in-the-loop policy suggestions ─────────────────────────────────────
+
+// POST/GET /config/policy/suggestions
+func (h *Handler) handleSuggestions(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		status := r.URL.Query().Get("status") // "" = all
+		jsonOK(w, h.suggestions.List(status))
+
+	case http.MethodPost:
+		var req struct {
+			Rule       suggestion.RuleSpec `json:"rule"`
+			Reason     string              `json:"reason"`
+			Source     string              `json:"source"`
+			Confidence float64             `json:"confidence"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		sug, err := h.suggestions.Create(req.Rule, req.Reason, req.Source, req.Confidence)
+		if err != nil {
+			jsonErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		slog.Info("policy suggestion created", "id", sug.ID, "rule", sug.Rule.Name,
+			"source", sug.Source, "confidence", sug.Confidence)
+		w.WriteHeader(http.StatusCreated)
+		jsonOK(w, sug)
+
+	default:
+		jsonErr(w, http.StatusMethodNotAllowed, "use GET or POST")
+	}
+}
+
+// /config/policy/suggestions/{id}
+// /config/policy/suggestions/{id}/approve
+// /config/policy/suggestions/{id}/reject
+func (h *Handler) handleSuggestionAction(w http.ResponseWriter, r *http.Request) {
+	remainder := strings.TrimPrefix(r.URL.Path, "/config/policy/suggestions/")
+	parts     := strings.SplitN(remainder, "/", 2)
+	id        := parts[0]
+	action    := ""
+	if len(parts) == 2 {
+		action = parts[1]
+	}
+
+	switch {
+	case r.Method == http.MethodGet && action == "":
+		sug, err := h.suggestions.Get(id)
+		if err != nil {
+			jsonErr(w, http.StatusNotFound, err.Error())
+			return
+		}
+		jsonOK(w, sug)
+
+	case r.Method == http.MethodPut && action == "approve":
+		var req suggestion.ApproveRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.ReviewedBy == "" {
+			jsonErr(w, http.StatusBadRequest, "reviewed_by is required")
+			return
+		}
+		sug, err := h.suggestions.Approve(id, req.ReviewedBy)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, suggestion.ErrNotFound) { status = http.StatusNotFound }
+			if errors.Is(err, suggestion.ErrNotPending) { status = http.StatusConflict }
+			jsonErr(w, status, err.Error())
+			return
+		}
+		slog.Info("policy suggestion approved", "id", id, "rule", sug.Rule.Name,
+			"reviewed_by", req.ReviewedBy)
+		jsonOK(w, sug)
+
+	case r.Method == http.MethodPut && action == "reject":
+		var req suggestion.RejectRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.ReviewedBy == "" {
+			jsonErr(w, http.StatusBadRequest, "reviewed_by is required")
+			return
+		}
+		sug, err := h.suggestions.Reject(id, req.ReviewedBy, req.RejectReason)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, suggestion.ErrNotFound) { status = http.StatusNotFound }
+			if errors.Is(err, suggestion.ErrNotPending) { status = http.StatusConflict }
+			jsonErr(w, status, err.Error())
+			return
+		}
+		slog.Info("policy suggestion rejected", "id", id, "reviewed_by", req.ReviewedBy)
+		jsonOK(w, sug)
+
+	default:
+		jsonErr(w, http.StatusNotFound, "unknown action")
 	}
 }
 

@@ -1,4 +1,4 @@
-/// Server-Sent Events (SSE) parser and encoder.
+/// Server-Sent Events (SSE) parser, encoder, and sliding-window redaction buffer.
 ///
 /// Used for streaming AI responses from OpenAI and Anthropic.
 /// SSE format per W3C spec:
@@ -10,7 +10,10 @@
 /// The proxy:
 ///   1. Receives SSE from the upstream AI
 ///   2. Parses each event to extract completion text chunks
-///   3. Re-encodes and forwards to the client
+///   3. Feeds events through `SseRedactBuffer` — events safe past the lookahead
+///      window are forwarded immediately; the tail is scanned and optionally
+///      redacted when [DONE] arrives
+///   4. Re-encodes and forwards to the client
 
 // ── SSE event ─────────────────────────────────────────────────────────────────
 
@@ -165,6 +168,194 @@ pub fn anthropic_chunk_text(event: &SseEvent) -> Option<String> {
         "content_block_delta" => v["delta"]["text"].as_str().map(|s| s.to_owned()),
         _ => None,
     }
+}
+
+// ── Upstream kind ──────────────────────────────────────────────────────────────
+
+/// Which upstream API format the stream uses — controls delta extraction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpstreamKind {
+    OpenAI,
+    Anthropic,
+}
+
+// ── Sliding-window streaming redaction buffer ──────────────────────────────────
+
+/// Minimum chars held in the lookahead tail before forwarding.
+///
+/// 200 chars covers the longest PII pattern (OpenAI key ~50 chars) plus
+/// surrounding context, with margin for multi-event spans.
+const STREAM_LOOKAHEAD: usize = 200;
+
+/// Buffers SSE events in a sliding-window tail to detect and redact PII that
+/// might span across multiple streaming chunk boundaries.
+///
+/// Events whose text falls entirely before the lookahead window are forwarded
+/// immediately (preserving streaming TTFT for clean content).  When `[DONE]`
+/// arrives the remaining tail is scanned once and any PII is redacted before
+/// the buffered events are flushed to the client.
+pub struct SseRedactBuffer {
+    /// Full accumulated text from all deltas seen so far.
+    text:               String,
+    /// Events buffered in the lookahead window: (event, delta_text, text_end_offset).
+    pending:            Vec<(SseEvent, String, usize)>,
+    /// Byte offset in `text` up to which events have already been forwarded.
+    forwarded_text_end: usize,
+}
+
+impl SseRedactBuffer {
+    pub fn new() -> Self {
+        SseRedactBuffer {
+            text:               String::new(),
+            pending:            Vec::new(),
+            forwarded_text_end: 0,
+        }
+    }
+
+    /// Push one parsed SSE event.
+    ///
+    /// Extracts the text delta (if any), appends it to the accumulated text,
+    /// and returns any events that are now safe to forward (clear of the
+    /// lookahead window and not part of a pending PII scan).
+    pub fn push(&mut self, event: SseEvent, kind: UpstreamKind) -> Vec<SseEvent> {
+        let delta = match kind {
+            UpstreamKind::OpenAI    => openai_chunk_text(&event).unwrap_or_default(),
+            UpstreamKind::Anthropic => anthropic_chunk_text(&event).unwrap_or_default(),
+        };
+        let text_end = self.text.len() + delta.len();
+        self.text.push_str(&delta);
+        self.pending.push((event, delta, text_end));
+        self.drain_safe_window()
+    }
+
+    /// Called when `[DONE]` is received: scan and optionally redact the buffered
+    /// tail, then return all remaining pending events for final forwarding.
+    pub fn flush_done(self) -> Vec<SseEvent> {
+        if self.pending.is_empty() {
+            return vec![];
+        }
+        let tail = &self.text[self.forwarded_text_end..];
+        if tail.is_empty() {
+            return self.pending.into_iter().map(|(ev, _, _)| ev).collect();
+        }
+        // Scan the buffered tail for PII
+        let detector = crate::detect::Detector::new();
+        match detector.scan(tail) {
+            crate::detect::DetectVerdict::Redact { redacted, .. } => {
+                rebuild_events_redacted(self.pending, tail, &redacted)
+            }
+            crate::detect::DetectVerdict::Block { .. } => {
+                // Tail contained block-level PII: replace with a single marker event
+                vec![SseEvent {
+                    event: None,
+                    data:  "[TSM_BLOCKED: content removed by security policy]".into(),
+                    id:    None,
+                    retry: None,
+                }]
+            }
+            _ => {
+                // Clean: forward all buffered events unchanged
+                self.pending.into_iter().map(|(ev, _, _)| ev).collect()
+            }
+        }
+    }
+
+    /// Drain events whose text ends before the lookahead window — these are
+    /// safe to forward immediately without waiting for PII confirmation.
+    fn drain_safe_window(&mut self) -> Vec<SseEvent> {
+        let safe_up_to = self.text.len().saturating_sub(STREAM_LOOKAHEAD);
+        let take = self.pending.iter()
+            .take_while(|(_, _, end)| *end <= safe_up_to)
+            .count();
+        if take == 0 {
+            return vec![];
+        }
+        let drained: Vec<_> = self.pending.drain(..take).collect();
+        if let Some((_, _, end)) = drained.last() {
+            self.forwarded_text_end = *end;
+        }
+        drained.into_iter().map(|(ev, _, _)| ev).collect()
+    }
+}
+
+/// Rebuild buffered events, patching deltas that fall inside the redacted zone.
+fn rebuild_events_redacted(
+    pending:  Vec<(SseEvent, String, usize)>,
+    original: &str,
+    redacted: &str,
+) -> Vec<SseEvent> {
+    if original == redacted {
+        return pending.into_iter().map(|(ev, _, _)| ev).collect();
+    }
+    // Find the first character position where original and redacted diverge.
+    let diff_at = original
+        .char_indices()
+        .zip(redacted.char_indices())
+        .find(|((_, a), (_, b))| a != b)
+        .map(|((i, _), _)| i)
+        .unwrap_or_else(|| original.len().min(redacted.len()));
+
+    let mut out            = Vec::with_capacity(pending.len());
+    let mut orig_cursor    = 0usize;
+    let mut redacted_emitted = false;
+
+    for (event, delta, _) in pending {
+        let delta_start = orig_cursor;
+        let delta_end   = orig_cursor + delta.len();
+        orig_cursor     = delta_end;
+
+        if delta_end <= diff_at {
+            // Delta is entirely before the redaction zone — forward unchanged.
+            out.push(event);
+        } else if delta_start >= diff_at && !redacted_emitted {
+            // First delta that overlaps the redaction zone: carry all redacted tail.
+            redacted_emitted = true;
+            let new_delta = redacted[diff_at..].to_owned();
+            out.push(patch_event_delta(event, &delta, &new_delta));
+        } else if delta_start >= diff_at {
+            // Subsequent deltas after the redacted label was already emitted: empty.
+            out.push(patch_event_delta(event, &delta, ""));
+        } else {
+            // Delta spans the diff boundary: safe prefix + redacted suffix.
+            let safe_prefix = &delta[..diff_at.saturating_sub(delta_start)];
+            let mut new_delta = safe_prefix.to_owned();
+            if !redacted_emitted {
+                redacted_emitted = true;
+                new_delta.push_str(&redacted[diff_at..]);
+            }
+            out.push(patch_event_delta(event, &delta, &new_delta));
+        }
+    }
+    out
+}
+
+/// Patch the text delta inside an SSE event's JSON payload.
+///
+/// Handles both OpenAI (`choices[0].delta.content`) and Anthropic (`delta.text`)
+/// formats.  If neither is matched, the event is returned unchanged so the
+/// stream is never broken.
+fn patch_event_delta(event: SseEvent, old_delta: &str, new_delta: &str) -> SseEvent {
+    if old_delta == new_delta {
+        return event;
+    }
+    if let Ok(mut v) = serde_json::from_str::<serde_json::Value>(&event.data) {
+        // OpenAI format: {"choices":[{"delta":{"content":"..."}},...]}
+        if v["choices"][0]["delta"]["content"].is_string() {
+            v["choices"][0]["delta"]["content"] = serde_json::Value::String(new_delta.into());
+            if let Ok(new_data) = serde_json::to_string(&v) {
+                return SseEvent { data: new_data, ..event };
+            }
+        }
+        // Anthropic content_block_delta format: {"delta":{"text":"..."}}
+        if v["delta"]["text"].is_string() {
+            v["delta"]["text"] = serde_json::Value::String(new_delta.into());
+            if let Ok(new_data) = serde_json::to_string(&v) {
+                return SseEvent { data: new_data, ..event };
+            }
+        }
+    }
+    // Fallback: return unchanged rather than breaking the stream
+    event
 }
 
 /// Build a single SSE data event.

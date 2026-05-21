@@ -37,18 +37,26 @@ type Node struct {
 
 // Registry is a thread-safe set of cluster nodes.
 type Registry struct {
-	mu    sync.RWMutex
-	nodes map[string]*Node
+	mu           sync.RWMutex
+	nodes        map[string]*Node
+	onNodeUpdate func(*Node) // optional persistence hook
 }
 
 func NewRegistry() *Registry {
 	return &Registry{nodes: make(map[string]*Node)}
 }
 
+// OnNodeUpdate registers a hook called after every Register/Deregister/health change.
+// The hook receives a copy of the node and is called with the mutex released.
+func (r *Registry) OnNodeUpdate(fn func(*Node)) {
+	r.mu.Lock()
+	r.onNodeUpdate = fn
+	r.mu.Unlock()
+}
+
 // Register adds or refreshes a node.
 func (r *Registry) Register(id string, role Role, addr, healthPath string) *Node {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	n, ok := r.nodes[id]
 	if !ok {
 		n = &Node{ID: id, Role: role, Addr: addr, HealthPath: healthPath, Healthy: true}
@@ -57,6 +65,12 @@ func (r *Registry) Register(id string, role Role, addr, healthPath string) *Node
 	n.LastSeen = time.Now().UTC()
 	n.Healthy = true
 	n.FailStreak = 0
+	cp := *n
+	hook := r.onNodeUpdate
+	r.mu.Unlock()
+	if hook != nil {
+		hook(&cp)
+	}
 	return n
 }
 

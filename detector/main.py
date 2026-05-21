@@ -46,6 +46,11 @@ from detector.correlation import correlate, correlation_stats
 from detector.behavioral  import get_analyzer
 from detector.anomaly     import get_anomaly_detector
 from detector.semantic    import get_semantic_detector
+from detector.presidio_layer import scan as presidio_scan, is_available as presidio_available
+from detector.tokenizer   import get_tokenizer
+from detector.telemetry   import init_telemetry, trace_detect_call, record_exception, is_enabled as otel_enabled
+from detector.speculative_security import SecurityCascade, CascadeVerdict
+from detector.output_inspector import OutputInspector, OutputInspectResult
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -178,9 +183,18 @@ async def _auth_middleware(request: Request, call_next):
             )
     return await call_next(request)
 
-classifier    = Classifier()
-policy_engine = PolicyEngine()
-sanitizer     = Sanitizer()
+classifier       = Classifier()
+policy_engine    = PolicyEngine()
+sanitizer        = Sanitizer()
+security_cascade = SecurityCascade()
+output_inspector = OutputInspector()
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    """Initialise optional subsystems (OTel, warm-up ML models, etc.)."""
+    if not init_telemetry():
+        pass  # OTel absent or disabled — silent, not an error
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -207,6 +221,10 @@ class DetectResponse(BaseModel):
     findings: list[Finding]
     policy_rule: str | None
     latency_ms: float
+    # Tokenization fields (populated when action == "redact"):
+    # vault_id lets the proxy call POST /detokenize with the LLM response.
+    vault_id: str | None = None
+    presidio_available: bool = False
 
 class ScanResponseRequest(BaseModel):
     """Scan an AI model's response text for PII leakage."""
@@ -237,15 +255,20 @@ class RuleRequest(BaseModel):
 def health():
     sem = get_semantic_detector()
     return {
-        "status":       "healthy",
-        "service":      "TSM Detector",
-        "version":      "2.0.0",
-        "llm_assist":   bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")),
-        "semantic":     sem.available,
-        "isolation_forest": True,
-        "correlation":  correlation_stats(),
-        "grpc_port":    int(os.environ.get("GRPC_PORT", 50051)),
-        "auth_enabled": bool(_DETECTOR_KEY),
+        "status":              "healthy",
+        "service":             "TSM Detector",
+        "version":             "2.0.0",
+        "llm_assist":          bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")),
+        "semantic":            sem.available,
+        "isolation_forest":    True,
+        "correlation":         correlation_stats(),
+        "grpc_port":           int(os.environ.get("GRPC_PORT", 50051)),
+        "auth_enabled":        bool(_DETECTOR_KEY),
+        "presidio":            presidio_available(),
+        "otel_tracing":        otel_enabled(),
+        "cascade_tier1_ready": security_cascade.tier1_ready(),
+        "cascade_tier2_ready": security_cascade.tier2_ready(),
+        "output_inspector":    True,
     }
 
 @app.get("/metrics")
@@ -277,6 +300,44 @@ async def _detect_impl(req: DetectRequest) -> DetectResponse:
         m.get("content", "") for m in req.messages if m.get("role") == "user"
     )
 
+    org_id      = req.metadata.get("org_id", "default")
+    session_id  = req.metadata.get("session_id", "unknown")
+    request_id  = req.metadata.get("request_id", "unknown")
+
+    # ── Stage 0: Speculative security cascade ────────────────────────────────
+    # 3-tier cascade: Tier 0 (deterministic BPE+regex, 0ms) →
+    #                  Tier 1 (DistilBERT CPU, ~50ms) →
+    #                  Tier 2 (7B full model, ~500ms, only when uncertain).
+    # 90%+ of requests resolve at Tier 0.  Tier 1/2 are cold-started lazily.
+    cascade_verdict: CascadeVerdict = await asyncio.get_event_loop().run_in_executor(
+        None,
+        security_cascade.classify,
+        text, org_id, req.model, session_id,
+    )
+    if cascade_verdict.action == "block":
+        # Short-circuit: deterministic or model-confirmed block.
+        latency = (time.time() - t0) * 1000
+        _metrics.record("block", latency)
+        _write_audit({
+            "ts": time.time(), "request_id": request_id, "org_id": org_id,
+            "model": req.model, "action": "block",
+            "pii_types": cascade_verdict.pii_types,
+            "risk_score": round(cascade_verdict.risk_score, 2),
+            "severity": "critical", "rule": "cascade-tier0-block",
+            "latency_ms": round(latency, 2), "stage": cascade_verdict.tier,
+        })
+        return DetectResponse(
+            risk_score=cascade_verdict.risk_score,
+            action="block",
+            pii_types=cascade_verdict.pii_types,
+            severity="critical",
+            redacted_body=dict(req.model_dump()),
+            findings=[],
+            policy_rule=f"cascade-{cascade_verdict.tier}",
+            latency_ms=round(latency, 2),
+            presidio_available=presidio_available(),
+        )
+
     # ── Stage 1: Fast regex + entropy scan ─────────────────────────────────
     scan = classifier.scan(text)
 
@@ -305,6 +366,16 @@ async def _detect_impl(req: DetectRequest) -> DetectResponse:
         if sem_findings:
             scan.merge_structural(sem_findings)
 
+    # ── Stage 4c: Presidio NER — semantic PII (names, DOB, IBAN, medical) ────
+    # ML-NER + 40+ international PII types + deterministic validators.
+    # Graceful degradation: no-op when presidio-analyzer not installed.
+    if presidio_available():
+        presidio_findings = await asyncio.get_event_loop().run_in_executor(
+            None, presidio_scan, text
+        )
+        if presidio_findings:
+            scan.merge_structural(presidio_findings)
+
     # ── Stage 5: CVSS-grounded risk scoring ──────────────────────────────────
     if scan.pii_types:
         cvss_score, cvss_level, _ = score_findings(scan.pii_types)
@@ -316,7 +387,7 @@ async def _detect_impl(req: DetectRequest) -> DetectResponse:
         final_severity   = scan.severity
 
     # ── Stage 6: Correlation — dedup and pattern elevation ───────────────────
-    org_id = req.metadata.get("org_id", "default")
+    # org_id already extracted at top of function
     _is_dup, final_risk_score, corr_count = correlate(org_id, scan.pii_types, final_risk_score)
 
     # ── Stage 6b: Behavioral analysis — velocity / exfiltration / scanning ───
@@ -351,13 +422,30 @@ async def _detect_impl(req: DetectRequest) -> DetectResponse:
         metadata=req.metadata,
     )
 
-    # ── Stage 8: Redact using centralized Sanitizer ───────────────────────────
+    # ── Stage 8: Tokenize / Redact ────────────────────────────────────────────
+    # "redact" action: use cryptographic tokenization instead of tombstones.
+    # The tokenizer vaults the original values and returns reversible tokens
+    # (tsm_tok_*) so the LLM sees opaque placeholders.  The proxy calls
+    # POST /detokenize with the LLM response to restore the original values.
+    #
+    # "route_local": data stays on-prem — still tokenize for audit-trail hygiene.
+    # "block": no forwarding, no tokenization needed.
+    vault_id: str | None = None
     redacted_body = dict(req.model_dump())
     if policy_result.action in ("redact", "route_local"):
-        redacted_body = _redact_body_messages(req)
+        tokenizer = get_tokenizer()
+        # Collect span-based findings for precise tokenization
+        span_findings = [f for f in scan.raw_findings if "start" in f and "end" in f]
+        if span_findings:
+            # Tokenize the full concatenated text then rebuild per-message
+            tokenized_text, vault_id = tokenizer.tokenize(text, span_findings)
+            redacted_body = _tokenize_body_messages(req, tokenizer, scan.raw_findings)
+        else:
+            # Fall back to regex-based sanitizer when no span info
+            redacted_body = _redact_body_messages(req)
 
-    latency    = (time.time() - t0) * 1000
-    request_id = req.metadata.get("request_id", "unknown")
+    latency = (time.time() - t0) * 1000
+    # request_id already extracted at top of function
 
     # ── Metrics ────────────────────────────────────────────────────────────────
     _metrics.record(policy_result.action, latency)
@@ -386,16 +474,58 @@ async def _detect_impl(req: DetectRequest) -> DetectResponse:
             request_id=request_id,
         )
 
-    return DetectResponse(
-        risk_score   = final_risk_score,
-        action       = policy_result.action,
-        pii_types    = scan.pii_types,
-        severity     = final_severity,
-        redacted_body= redacted_body,
-        findings     = [Finding(**f) for f in scan.raw_findings],
-        policy_rule  = policy_result.rule_name,
-        latency_ms   = round(latency, 2),
+    response = DetectResponse(
+        risk_score          = final_risk_score,
+        action              = policy_result.action,
+        pii_types           = scan.pii_types,
+        severity            = final_severity,
+        redacted_body       = redacted_body,
+        findings            = [Finding(**{k: v for k, v in f.items()
+                                         if k in ("type","severity","context","redacted")})
+                               for f in scan.raw_findings],
+        policy_rule         = policy_result.rule_name,
+        latency_ms          = round(latency, 2),
+        vault_id            = vault_id,
+        presidio_available  = presidio_available(),
     )
+
+    # ── OTel span (non-blocking, no-op when OTel not installed) ───────────────
+    with trace_detect_call(org_id, req.model, policy_result.action,
+                           scan.pii_types, final_risk_score, latency):
+        pass  # span context set; attributes already attached inside helper
+
+    return response
+
+
+def _tokenize_body_messages(req: DetectRequest, tokenizer, findings: list[dict]) -> dict[str, Any]:
+    """
+    Rebuild the request body with each user message content tokenized.
+    Returns the tokenized body dict (vault_id is tracked inside tokenizer).
+    """
+    body = req.model_dump()
+    new_messages = []
+    for m in req.messages:
+        if m.get("role") == "user" and isinstance(m.get("content"), str):
+            # Find findings with span info for this message
+            span_f = [f for f in findings if "start" in f and "end" in f]
+            if span_f:
+                tokenized, _ = tokenizer.tokenize(m["content"], span_f)
+            else:
+                san = sanitizer.sanitize(m["content"])
+                tokenized = san.sanitized_text
+            new_messages.append({**m, "content": tokenized})
+        else:
+            new_messages.append(m)
+    body["messages"] = new_messages
+    if req.prompt:
+        span_f = [f for f in findings if "start" in f and "end" in f]
+        if span_f:
+            tokenized_prompt, _ = tokenizer.tokenize(req.prompt, span_f)
+        else:
+            san = sanitizer.sanitize(req.prompt)
+            tokenized_prompt = san.sanitized_text
+        body["prompt"] = tokenized_prompt
+    return body
 
 
 def _redact_body_messages(req: DetectRequest) -> dict[str, Any]:
@@ -426,17 +556,51 @@ def _redact_body_messages(req: DetectRequest) -> dict[str, Any]:
 @app.post("/scan-response", response_model=ScanResponseResult)
 async def scan_response(req: ScanResponseRequest):
     """
-    Scan an AI model's response for PII leakage.
+    Scan an AI model's response for PII leakage, prompt injection vectors,
+    bypass acknowledgements, hallucinated credentials, and training data leakage.
 
-    Enterprise use case: detect when the model accidentally outputs PII
-    (e.g., training data memorisation, RAG retrieval leaking records).
+    Two complementary passes:
+      1. OutputInspector — specialised post-inference checks (bypass ack,
+         credential hallucination, injection vectors, verbatim training data)
+      2. Multi-stage classifier — same PII/NER/CVSS pipeline as /detect
+         (catches personal data in AI responses)
 
-    Unlike /detect which scans input prompts, this endpoint scans the
-    AI-generated response text before it reaches the end user.
+    Enterprise use case: intercept AI responses before they reach the user;
+    block or redact if the model outputted sensitive information.
     """
     t0 = time.time()
 
-    # Run the same multi-layer scan on the response text
+    # ── Pass 1: Output inspector (post-inference specialised checks) ──────────
+    # These checks are unique to AI responses (not applicable to user prompts).
+    # OutputInspectResult.threat: THREAT_NONE | BYPASS_ACKNOWLEDGEMENT | CREDENTIAL | etc.
+    insp: OutputInspectResult = await asyncio.get_event_loop().run_in_executor(
+        None,
+        output_inspector.inspect,
+        req.response_text,
+        {"request_id": req.request_id or "unknown"},
+    )
+
+    _BLOCK_THREATS = {"bypass_acknowledgement", "credential_hallucination", "prompt_injection"}
+    insp_is_block = insp.threat in _BLOCK_THREATS or (insp.risk_score >= 90 and insp.redacted is None)
+    insp_pii_types = [insp.technique] if insp.technique else []
+
+    # If the output inspector found a serious issue, short-circuit with block.
+    if insp_is_block:
+        latency = (time.time() - t0) * 1000
+        return ScanResponseResult(
+            pii_found=True,
+            pii_types=insp_pii_types or [insp.threat],
+            risk_score=insp.risk_score,
+            severity="critical",
+            redacted_text=insp.redacted or req.response_text,
+            findings=[Finding(
+                type=insp.threat, severity="critical",
+                context=insp.evidence[:200], redacted=True,
+            )],
+            latency_ms=round(latency, 2),
+        )
+
+    # ── Pass 2: PII scan on the response text ─────────────────────────────────
     scan = classifier.scan(req.response_text)
 
     # Structural scan (JWTs, high-entropy tokens in response)
@@ -448,17 +612,23 @@ async def scan_response(req: ScanResponseRequest):
     if ner:
         scan.merge_structural(ner)
 
+    # Merge any tags the output inspector surfaced
+    for t in insp_pii_types:
+        if t and t not in scan.pii_types:
+            scan.pii_types.append(t)
+
     # CVSS scoring
     if scan.pii_types:
         cvss_score, cvss_level, _ = score_findings(scan.pii_types)
-        final_risk = max(scan.risk_score, cvss_score)
+        final_risk = max(scan.risk_score, cvss_score, insp.risk_score)
         final_sev  = severity_from_level(cvss_level)
     else:
-        final_risk = scan.risk_score
+        final_risk = max(scan.risk_score, insp.risk_score)
         final_sev  = scan.severity
 
     # Redact PII from response text
     san = sanitizer.sanitize(req.response_text)
+    redacted = insp.redacted if insp.redacted else san.sanitized_text
 
     latency = (time.time() - t0) * 1000
 
@@ -467,10 +637,35 @@ async def scan_response(req: ScanResponseRequest):
         pii_types=scan.pii_types,
         risk_score=final_risk,
         severity=final_sev,
-        redacted_text=san.sanitized_text,
+        redacted_text=redacted,
         findings=[Finding(**f) for f in scan.raw_findings],
         latency_ms=round(latency, 2),
     )
+
+
+# ── Detokenize endpoint ───────────────────────────────────────────────────────
+
+class DetokenizeRequest(BaseModel):
+    """Restore original PII values in an LLM response."""
+    text:     str
+    vault_id: str | None = None
+
+class DetokenizeResponse(BaseModel):
+    restored_text: str
+    restorations:  list[dict]   # [{"token": str, "pii_type": str, "restored": bool}]
+
+@app.post("/detokenize", response_model=DetokenizeResponse)
+async def detokenize(req: DetokenizeRequest):
+    """
+    Swap tsm_tok_* tokens in an LLM response back to the original PII values.
+
+    The proxy calls this after receiving the LLM response for any request where
+    /detect returned a non-null vault_id.  Tokens that have expired or are
+    unknown are left in-place (so the caller always gets a usable response).
+    """
+    tokenizer = get_tokenizer()
+    restored, restorations = tokenizer.detokenize(req.text, req.vault_id)
+    return DetokenizeResponse(restored_text=restored, restorations=restorations)
 
 
 @app.get("/rules")

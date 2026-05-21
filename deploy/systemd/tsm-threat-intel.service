@@ -1,0 +1,47 @@
+[Unit]
+Description=TSM Threat Intelligence Feed Aggregator (Go)
+Documentation=https://github.com/tsm79/tsm79
+After=network-online.target redis.service
+Wants=network-online.target
+PartOf=tsm.target
+
+[Service]
+Type=simple
+User=tsm
+Group=tsm
+
+ExecStart=/usr/local/bin/tsm-threat-intel \
+    --redis   ${TSM_REDIS_URL:-localhost:6379} \
+    --listen  ${TSM_INTEL_LISTEN:-:9100} \
+    --log     ${TSM_LOG_LEVEL:-info}
+
+EnvironmentFile=-/etc/tsm/threat-intel.env
+
+Restart=on-failure
+RestartSec=10s
+StartLimitIntervalSec=120s
+StartLimitBurst=5
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+SystemCallFilter=@system-service
+
+# Resource limits
+LimitNOFILE=16384
+MemoryMax=512M
+CPUWeight=30
+
+TimeoutStopSec=15s
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target tsm.target

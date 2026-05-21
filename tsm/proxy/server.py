@@ -50,6 +50,58 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 logger = logging.getLogger("tsm.proxy")
 
+# ── Deprecation notice ────────────────────────────────────────────────────────
+#
+# tsm/proxy/server.py is the Python implementation of the TSM proxy.
+# It is DEPRECATED in favour of the Rust dataplane (dataplane/src/) which:
+#
+#   • Uses eBPF TC egress + TPROXY to intercept traffic without code changes
+#   • Achieves <1 ms overhead vs ~5-15 ms for Python async (GIL, interpreter)
+#   • Handles TLS 1.3 termination and re-encryption without buffering full bodies
+#   • Enforces concurrency limits at the OS thread level (no event loop stalls)
+#   • Streams SSE responses without chunking all tokens into one buffer
+#
+# Migration path:
+#   1. Build the Rust dataplane:  cd dataplane && cargo build --release
+#   2. Load the eBPF TPROXY hook: bash ebpf/setup-tproxy.sh
+#   3. Start the detector:        docker-compose up detector
+#   4. Start the Rust proxy:      ./target/release/tsm-dataplane
+#   5. Remove TSM_PROXY_URL references and point apps at port 8080 directly.
+#
+# This Python proxy will remain available until Q3 2026 for teams that cannot
+# yet deploy the Rust dataplane.  Set TSM_SUPPRESS_DEPRECATION=1 to silence
+# this warning in environments where migration is already tracked.
+
+import warnings as _warnings
+
+if not __import__("os").environ.get("TSM_SUPPRESS_DEPRECATION"):
+    _warnings.warn(
+        "\n"
+        "┌─────────────────────────────────────────────────────────────────────┐\n"
+        "│  TSM Python Proxy (tsm/proxy/server.py) is DEPRECATED               │\n"
+        "│                                                                       │\n"
+        "│  Migrate to the Rust dataplane for production use:                   │\n"
+        "│    cd dataplane && cargo build --release                              │\n"
+        "│    bash ebpf/setup-tproxy.sh   # eBPF TPROXY interception            │\n"
+        "│    ./target/release/tsm-dataplane                                     │\n"
+        "│                                                                       │\n"
+        "│  The Rust proxy provides:                                             │\n"
+        "│    • Zero-code-change interception (eBPF TPROXY, no HTTP_PROXY)       │\n"
+        "│    • <1ms overhead vs 5-15ms for Python                               │\n"
+        "│    • TLS 1.3 to upstream with Ed25519-verified policy hot-reload      │\n"
+        "│    • SSE streaming without buffering, Luhn-validated CC detection     │\n"
+        "│                                                                       │\n"
+        "│  Set TSM_SUPPRESS_DEPRECATION=1 to silence this warning.             │\n"
+        "└─────────────────────────────────────────────────────────────────────┘",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    logger.warning(
+        "TSM Python proxy is deprecated — migrate to the Rust dataplane. "
+        "See dataplane/src/main.rs and ebpf/setup-tproxy.sh. "
+        "Set TSM_SUPPRESS_DEPRECATION=1 to silence."
+    )
+
 # ── Config (env-driven, zero hardcoded values) ────────────────────────────────
 
 _DETECTOR_URL   = os.environ.get("DETECTOR_URL",        "http://localhost:8001")
@@ -58,6 +110,7 @@ _ANTHROPIC_KEY  = os.environ.get("ANTHROPIC_API_KEY",   "")
 _OLLAMA_URL     = os.environ.get("OLLAMA_URL",           "")
 _TSM_API_KEY    = os.environ.get("TSM_API_KEY",          "")   # "" = no auth required
 _RATE_LIMIT_RPM = int(os.environ.get("RATE_LIMIT_RPM",  "200"))
+_REDIS_URL      = os.environ.get("REDIS_URL",            "")   # "" = in-process only
 _MAX_BODY_BYTES = 4 * 1024 * 1024   # 4 MB
 _DETECTOR_TO    = float(os.environ.get("DETECTOR_TIMEOUT_S", "5"))
 _UPSTREAM_TO    = float(os.environ.get("UPSTREAM_TIMEOUT_S", "120"))
@@ -68,21 +121,32 @@ _UPSTREAM_URLS = {
     "ollama":    _OLLAMA_URL or "http://localhost:11434",
 }
 
-# ── Token-bucket rate limiter (per IP, in-process) ───────────────────────────
+# ── Rate limiter — Redis sliding-window with in-process fallback ─────────────
+#
+# Strategy: fixed-window counter in Redis (key = "tsm:rl:<ip>:<window>").
+# Window = current UTC minute.  One INCR + EXPIRE per request → O(1).
+#
+# Why not token-bucket in Redis?  Token-bucket needs two round-trips (GET+SET)
+# or a Lua script.  Fixed-window with 1-minute granularity is accurate enough
+# for abuse prevention and requires only one round-trip.
+#
+# Fallback: if Redis is unavailable the in-process token-bucket is used so the
+# proxy stays operational (degrade gracefully, not fail-closed on rate limiting).
 
-class _RateLimiter:
+class _InProcessLimiter:
+    """Token-bucket per-IP limiter (in-process, no Redis required)."""
     def __init__(self, rpm: int) -> None:
-        self._rate = rpm / 60.0         # tokens per second
-        self._burst = float(rpm)        # max bucket depth
-        self._buckets: dict[str, tuple[float, float]] = {}   # ip → (tokens, ts)
-        self._lock = threading.Lock()
+        self._rate  = rpm / 60.0
+        self._burst = float(rpm)
+        self._buckets: dict[str, tuple[float, float]] = {}
+        self._lock  = threading.Lock()
 
     def check(self, ip: str) -> bool:
         now = time.monotonic()
         with self._lock:
             if len(self._buckets) > 50_000:
-                # Evict IPs with full buckets (they haven't been rate-limited)
-                self._buckets = {k: v for k, v in self._buckets.items() if v[0] < self._burst}
+                self._buckets = {k: v for k, v in self._buckets.items()
+                                 if v[0] < self._burst}
             tokens, last = self._buckets.get(ip, (self._burst, now))
             tokens = min(self._burst, tokens + (now - last) * self._rate)
             if tokens < 1.0:
@@ -91,7 +155,50 @@ class _RateLimiter:
             self._buckets[ip] = (tokens - 1.0, now)
             return True
 
-_limiter = _RateLimiter(_RATE_LIMIT_RPM)
+
+class _RedisLimiter:
+    """
+    Fixed-window rate limiter backed by Redis.
+
+    Key schema:  tsm:rl:<ip>:<unix_minute>
+    Algorithm:
+      1. INCR the key → atomic counter for this IP in this minute-window
+      2. If count == 1 (first request), EXPIRE in 120s (two windows, for safety)
+      3. If count > rpm → rate-limited
+    """
+    def __init__(self, redis_client, rpm: int) -> None:
+        self._redis = redis_client
+        self._rpm   = rpm
+
+    def check(self, ip: str) -> bool:
+        try:
+            import time as _t
+            window = int(_t.time()) // 60    # current UTC minute
+            key    = f"tsm:rl:{ip}:{window}"
+            count  = self._redis.incr(key)
+            if count == 1:
+                self._redis.expire(key, 120)  # TTL: 2 minutes
+            return count <= self._rpm
+        except Exception as exc:
+            logger.warning("[rate-limiter] Redis error — falling back: %s", exc)
+            return True   # fail-open on Redis error (prefer availability)
+
+
+def _build_limiter(rpm: int, redis_url: str):
+    """Return a Redis limiter if REDIS_URL is set and reachable, else in-process."""
+    if redis_url:
+        try:
+            import redis as _r
+            client = _r.from_url(redis_url, socket_timeout=1.0, decode_responses=True)
+            client.ping()
+            logger.info("[rate-limiter] Redis backend connected (%s)", redis_url)
+            return _RedisLimiter(client, rpm)
+        except Exception as exc:
+            logger.warning("[rate-limiter] Redis unavailable (%s) — using in-process fallback", exc)
+    return _InProcessLimiter(rpm)
+
+
+_limiter = _build_limiter(_RATE_LIMIT_RPM, _REDIS_URL)
 
 # ── Runtime stats ─────────────────────────────────────────────────────────────
 
@@ -179,13 +286,15 @@ async def _auth_and_rate(request: Request, call_next):
 @app.get("/health")
 def health():
     return {
-        "status":   "healthy",
-        "service":  "TSM Proxy",
-        "version":  "2.1.0",
-        "detector": _DETECTOR_URL,
-        "openai":   bool(_OPENAI_KEY),
-        "anthropic": bool(_ANTHROPIC_KEY),
-        "ollama":   bool(_OLLAMA_URL),
+        "status":        "healthy",
+        "service":       "TSM Proxy",
+        "version":       "2.1.0",
+        "detector":      _DETECTOR_URL,
+        "openai":        bool(_OPENAI_KEY),
+        "anthropic":     bool(_ANTHROPIC_KEY),
+        "ollama":        bool(_OLLAMA_URL),
+        "rate_limiter":  "redis" if isinstance(_limiter, _RedisLimiter) else "in-process",
+        "rate_limit_rpm": _RATE_LIMIT_RPM,
     }
 
 @app.get("/stats")
@@ -257,12 +366,13 @@ async def _handle_ai_request(request: Request, path: str) -> Response:
         _stats.detector_errors += 1
         return _error(503, "Security detector unavailable — request blocked for safety")
 
-    action       = detect_result.get("action", "block")
+    action        = detect_result.get("action", "block")
     redacted_body = detect_result.get("redacted_body", body)
-    pii_types    = detect_result.get("pii_types", [])
-    risk_score   = detect_result.get("risk_score", 0.0)
-    rule_name    = detect_result.get("policy_rule", "default")
-    severity     = detect_result.get("severity", "none")
+    pii_types     = detect_result.get("pii_types", [])
+    risk_score    = detect_result.get("risk_score", 0.0)
+    rule_name     = detect_result.get("policy_rule", "default")
+    severity      = detect_result.get("severity", "none")
+    vault_id      = detect_result.get("vault_id")   # non-null when PII was tokenized
 
     _stats.record(action)
 
@@ -287,9 +397,11 @@ async def _handle_ai_request(request: Request, path: str) -> Response:
     upstream_headers = _build_upstream_headers(request, model, upstream_url)
 
     if is_stream:
-        return _stream_response(forward_body, path, upstream_url, upstream_headers, pii_types)
+        # For streaming, include vault_id in response headers so downstream
+        # callers can POST /detokenize after the stream completes.
+        return _stream_response(forward_body, path, upstream_url, upstream_headers, pii_types, vault_id)
     else:
-        return await _json_response(forward_body, path, upstream_url, upstream_headers, pii_types, risk_score, action)
+        return await _json_response(forward_body, path, upstream_url, upstream_headers, pii_types, risk_score, action, vault_id)
 
 
 async def _call_detector(
@@ -374,6 +486,7 @@ async def _json_response(
     pii_types: list[str],
     risk_score: float,
     action: str,
+    vault_id: str | None = None,
 ) -> Response:
     """Forward request and return the complete JSON response."""
     try:
@@ -393,6 +506,13 @@ async def _json_response(
     except Exception:
         return Response(content=resp.content, status_code=resp.status_code,
                         media_type="application/json")
+
+    # ── Detokenize LLM response when vault_id is present ─────────────────────
+    # The detector tokenized PII in the request (e.g. SSN → tsm_tok_*).
+    # The LLM may echo those tokens back in its response; swap them back so the
+    # end user receives the original values in context.
+    if vault_id:
+        data = await _detokenize_response(data, vault_id)
 
     # Inject TSM metadata into the response
     data.setdefault("tsm", {}).update({
@@ -415,6 +535,7 @@ def _stream_response(
     upstream_url: str,
     headers: dict[str, str],
     pii_types: list[str],
+    vault_id: str | None = None,
 ) -> StreamingResponse:
     """Return a StreamingResponse that proxies SSE chunks in real time."""
 
@@ -446,16 +567,102 @@ def _stream_response(
             yield f"data: {err}\n\n".encode()
             yield b"data: [DONE]\n\n"
 
+    resp_headers: dict[str, str] = {
+        "Cache-Control":    "no-cache",
+        "X-Accel-Buffering": "no",
+        "X-TSM-Firewall":   "active",
+        "X-TSM-PII":        ",".join(pii_types) or "none",
+    }
+    # Expose vault_id so the SSE consumer can call POST /detokenize when done.
+    if vault_id:
+        resp_headers["X-TSM-Vault-ID"] = vault_id
+
     return StreamingResponse(
         _stream(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control":    "no-cache",
-            "X-Accel-Buffering": "no",
-            "X-TSM-Firewall":   "active",
-            "X-TSM-PII":        ",".join(pii_types) or "none",
-        },
+        headers=resp_headers,
     )
+
+
+async def _detokenize_response(data: dict, vault_id: str) -> dict:
+    """
+    Walk common OpenAI/Anthropic response shapes and swap tsm_tok_* tokens
+    back to their original PII values via POST /detokenize on the detector.
+
+    Handled paths:
+      OpenAI:    data["choices"][*]["message"]["content"]
+      Anthropic: data["content"][*]["text"]
+      Raw:       data["text"] / data["content"] (strings)
+
+    If the detector is unavailable or returns an error the original data dict
+    is returned unchanged (never raise — response delivery must not fail).
+    """
+    if _http is None:
+        return data
+
+    def _extract_texts(d: dict) -> list[str]:
+        texts: list[str] = []
+        for choice in d.get("choices", []):
+            msg = choice.get("message", {})
+            if isinstance(msg.get("content"), str):
+                texts.append(msg["content"])
+        for block in d.get("content", []):
+            if isinstance(block.get("text"), str):
+                texts.append(block["text"])
+        if isinstance(d.get("text"), str):
+            texts.append(d["text"])
+        return texts
+
+    all_text = "\n".join(_extract_texts(data))
+    if not all_text or "tsm_tok_" not in all_text:
+        return data  # fast path — no tokens present
+
+    try:
+        resp = await _http.post(
+            f"{_DETECTOR_URL}/detokenize",
+            json={"text": all_text, "vault_id": vault_id},
+            timeout=2.0,
+        )
+        if resp.status_code != 200:
+            return data
+        result = resp.json()
+        restored = result.get("restored_text", all_text)
+    except Exception as exc:
+        logger.warning("[detokenize] failed: %s", exc)
+        return data
+
+    # Re-inject the restored text back into the response structure.
+    # We re-substitute per-field to avoid cross-contaminating multiple choices.
+    import copy
+    out = copy.deepcopy(data)
+    for choice in out.get("choices", []):
+        msg = choice.get("message", {})
+        if isinstance(msg.get("content"), str) and "tsm_tok_" in msg["content"]:
+            try:
+                r = await _http.post(
+                    f"{_DETECTOR_URL}/detokenize",
+                    json={"text": msg["content"], "vault_id": vault_id},
+                    timeout=2.0,
+                )
+                if r.status_code == 200:
+                    msg["content"] = r.json().get("restored_text", msg["content"])
+            except Exception:
+                pass
+    for block in out.get("content", []):
+        if isinstance(block.get("text"), str) and "tsm_tok_" in block["text"]:
+            try:
+                r = await _http.post(
+                    f"{_DETECTOR_URL}/detokenize",
+                    json={"text": block["text"], "vault_id": vault_id},
+                    timeout=2.0,
+                )
+                if r.status_code == 200:
+                    block["text"] = r.json().get("restored_text", block["text"])
+            except Exception:
+                pass
+    if isinstance(out.get("text"), str) and "tsm_tok_" in out["text"]:
+        out["text"] = restored
+    return out
 
 
 def _block_response(

@@ -36,10 +36,20 @@ pub fn is_debug() -> bool {
 
 // ── Core emit function ────────────────────────────────────────────────────────
 
-/// Emit one JSON log line to stderr.
+/// Emit one JSON log line to **stdout**.
 ///
-/// `fields` is a flat alternating `[key, value, key, value, ...]` slice of
-/// `&str` — the macro helpers build it for you.
+/// Emitting to stdout (not stderr) is the correct container convention:
+/// - Docker / containerd captures stdout for `docker logs` and log drivers
+/// - Kubernetes captures stdout for `kubectl logs` and Fluentd/Loki collectors
+/// - Cloud log agents (Datadog, Splunk HEC, CloudWatch) scrape stdout by default
+///
+/// stderr is reserved for fatal panics and startup errors before the logger
+/// is initialised.  All structured telemetry goes to stdout.
+///
+/// `fields` is a flat `[(key, value)]` slice — the macro helpers build it.
+///
+/// W3C TraceContext: if a `traceparent` field is present in `fields`, it is
+/// emitted inline so SIEM correlators can join spans across services.
 pub fn emit(level: &str, component: &str, msg: &str, fields: &[(&str, String)]) {
     let ts = unix_ms();
     let mut out = String::with_capacity(256);
@@ -60,7 +70,8 @@ pub fn emit(level: &str, component: &str, msg: &str, fields: &[(&str, String)]) 
         out.push('"');
     }
     out.push('}');
-    eprintln!("{}", out);
+    // println! (stdout) — captured by all container log drivers
+    println!("{}", out);
 }
 
 // ── Macros ────────────────────────────────────────────────────────────────────
@@ -150,20 +161,104 @@ fn json_escape(s: &str) -> String {
     out
 }
 
+// ── Pipeline stage enum ───────────────────────────────────────────────────────
+
+/// Named stages of the TSM per-request pipeline.
+///
+/// Emitting a span event at each boundary lets SIEM / Datadog APM reconstruct
+/// the full request trace and identify which stage added latency or failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    Ingest,      // read bytes from socket
+    Normalize,   // URL-decode, extract user text
+    Classify,    // fast-path detector scan
+    PyDetector,  // Python NER detector call (Ambiguous only)
+    Policy,      // policy rule evaluation
+    Route,       // upstream forwarding
+    Respond,     // write response to client
+}
+
+impl Stage {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Stage::Ingest     => "ingest",
+            Stage::Normalize  => "normalize",
+            Stage::Classify   => "classify",
+            Stage::PyDetector => "py_detector",
+            Stage::Policy     => "policy",
+            Stage::Route      => "route",
+            Stage::Respond    => "respond",
+        }
+    }
+}
+
+// ── Pipeline span ─────────────────────────────────────────────────────────────
+
+/// RAII span: emits `stage_start` on construction, `stage_end` on drop.
+///
+/// Construct at the entry of each pipeline stage.  On drop (end of scope),
+/// emits a `stage_end` JSON event with elapsed microseconds.  Automatically
+/// handles panics — Drop still fires, so the span always closes.
+///
+/// ```rust
+/// let _span = PipelineSpan::start(Stage::Classify, &request_id, traceparent);
+/// // ... do the work ...
+/// // _span drops here → emits stage_end
+/// ```
+pub struct PipelineSpan {
+    stage:      Stage,
+    request_id: String,
+    traceparent: String,
+    started:    std::time::Instant,
+}
+
+impl PipelineSpan {
+    pub fn start(stage: Stage, request_id: &str, traceparent: &str) -> Self {
+        emit("debug", "span", "stage_start", &[
+            ("stage",      stage.as_str().to_owned()),
+            ("request_id", request_id.to_owned()),
+            ("traceparent",traceparent.to_owned()),
+        ]);
+        PipelineSpan {
+            stage,
+            request_id: request_id.to_owned(),
+            traceparent: traceparent.to_owned(),
+            started:    std::time::Instant::now(),
+        }
+    }
+}
+
+impl Drop for PipelineSpan {
+    fn drop(&mut self) {
+        let elapsed_us = self.started.elapsed().as_micros();
+        emit("debug", "span", "stage_end", &[
+            ("stage",      self.stage.as_str().to_owned()),
+            ("request_id", self.request_id.clone()),
+            ("traceparent",self.traceparent.clone()),
+            ("elapsed_us", elapsed_us.to_string()),
+        ]);
+    }
+}
+
 // ── Request telemetry helper ──────────────────────────────────────────────────
 
 /// Structured access log entry for one proxied request.
+///
+/// Emitted once per request at the `respond` stage.  Includes `traceparent`
+/// so Splunk / Datadog can join this event to upstream APM spans.
 pub struct RequestLog<'a> {
-    pub request_id: &'a str,
-    pub method:     &'a str,
-    pub path:       &'a str,
-    pub status:     u16,
-    pub action:     &'a str,
-    pub pii_types:  &'a [String],
-    pub risk_score: f64,
-    pub latency_ms: f64,
-    pub upstream:   &'a str,
-    pub client_ip:  &'a str,
+    pub request_id:  &'a str,
+    pub method:      &'a str,
+    pub path:        &'a str,
+    pub status:      u16,
+    pub action:      &'a str,
+    pub rule_fired:  &'a str,            // name of the policy rule that determined action
+    pub pii_types:   &'a [String],
+    pub risk_score:  f64,
+    pub latency_ms:  f64,
+    pub upstream:    &'a str,
+    pub client_ip:   &'a str,
+    pub traceparent: &'a str,           // W3C TraceContext — for SIEM correlation
 }
 
 impl<'a> RequestLog<'a> {
@@ -174,16 +269,18 @@ impl<'a> RequestLog<'a> {
             self.pii_types.join(",")
         };
         emit("info", "pipeline", "request", &[
-            ("request_id", self.request_id.to_owned()),
-            ("method",     self.method.to_owned()),
-            ("path",       self.path.to_owned()),
-            ("status",     self.status.to_string()),
-            ("action",     self.action.to_owned()),
-            ("pii",        pii),
-            ("risk",       format!("{:.1}", self.risk_score)),
-            ("latency_ms", format!("{:.2}", self.latency_ms)),
-            ("upstream",   self.upstream.to_owned()),
-            ("client_ip",  self.client_ip.to_owned()),
+            ("request_id",  self.request_id.to_owned()),
+            ("method",      self.method.to_owned()),
+            ("path",        self.path.to_owned()),
+            ("status",      self.status.to_string()),
+            ("action",      self.action.to_owned()),
+            ("rule_fired",  self.rule_fired.to_owned()),
+            ("pii",         pii),
+            ("risk",        format!("{:.1}", self.risk_score)),
+            ("latency_ms",  format!("{:.2}", self.latency_ms)),
+            ("upstream",    self.upstream.to_owned()),
+            ("client_ip",   self.client_ip.to_owned()),
+            ("traceparent", self.traceparent.to_owned()),
         ]);
     }
 }

@@ -3,11 +3,15 @@ pub mod entropy;
 pub mod structural;
 pub mod cvss;
 pub mod redact;
+pub mod bpe;
+pub mod pipeline;
+pub mod onnx_engine;
 
 pub use redact::{RedactSpan, redact, span_from_match};
 pub use cvss::{Severity, composite_score, RiskInputs};
+pub use pipeline::{Pipeline, PipelineResult, DetectionStage, Verdict, Span as DetectSpan, StageContext};
 
-use patterns::{pattern_set, pattern_regexes, PATTERN_META, has_negation_context};
+use patterns::{pattern_set, pattern_regexes, prefilter_matches, PATTERN_META, has_negation_context};
 use entropy::entropy_verdict;
 use structural::{scan_structural, base64_decode_standard};
 use cvss::{pattern_risk, luhn_valid};
@@ -89,11 +93,54 @@ impl Detector {
     /// The caller must supply the full user-visible text extracted from the AI
     /// request body (all message content concatenated).
     pub fn scan(&self, text: &str) -> DetectVerdict {
-        // ── 0. Normalize: URL-decode %XX sequences before regex scan ──────────
+        // ── 0a. BPE token-level deterministic scan (before ANY regex / semantic)
+        // Catches encoding tricks, token splitting, homoglyphs, control injection.
+        // These are structural threats that probabilistic methods cannot reliably catch.
+        {
+            use crate::detect::bpe::{bpe_scan, BpeThreat};
+            let bpe = bpe_scan(text);
+            if bpe.threat != BpeThreat::None {
+                return DetectVerdict::Block {
+                    pii_types:  vec![format!("BPE:{}", bpe.technique)],
+                    risk_score: 95.0,
+                    severity:   "critical".to_owned(),
+                    spans:      vec![RedactSpan {
+                        start:    bpe.span_start,
+                        end:      bpe.span_end,
+                        pii_type: bpe.technique.to_owned(),
+                    }],
+                };
+            }
+        }
+
+        // ── 0b. Normalize: URL-decode %XX sequences before regex scan ─────────
         let normalized = url_decode_minimal(text);
         let text = normalized.as_str();
 
-        // ── 1. Regex pattern scan ─────────────────────────────────────────────
+        // ── 1. Aho-Corasick pre-filter (literal prefix scan) ─────────────────
+        // If no known secret prefix or jailbreak keyword appears anywhere in
+        // the normalized text, all 14 regex patterns are guaranteed to return
+        // no match.  Skip the regex engine entirely for clean inputs.
+        if !prefilter_matches(text) {
+            // Fast path: check entropy and NER keywords only (no regex needed)
+            let ent = entropy_verdict(text);
+            if ent.high_entropy_found {
+                return DetectVerdict::Ambiguous {
+                    risk_score: ent.risk_contribution.max(35.0),
+                    reason: AmbiguousReason::HighEntropyOnly,
+                };
+            }
+            let tl = text.to_lowercase();
+            if NER_KEYWORDS.iter().any(|&kw| tl.contains(kw)) {
+                return DetectVerdict::Ambiguous {
+                    risk_score: 36.0,
+                    reason: AmbiguousReason::NerKeywords,
+                };
+            }
+            return DetectVerdict::Clean;
+        }
+
+        // ── 2. Full regex pattern scan (only reached on prefilter hit) ────────
         let set        = pattern_set();
         let regexes    = pattern_regexes();
         let matched_ix: Vec<usize> = set.matches(text).iter().collect();

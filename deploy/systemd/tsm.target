@@ -1,0 +1,8 @@
+[Unit]
+Description=TSM — The Sovereign Mechanica (all services)
+Documentation=https://github.com/tsm79/tsm79
+Wants=tsm-loader.service tsm-detector.service tsm-dataplane.service tsm-admin.service
+After=tsm-loader.service tsm-detector.service tsm-dataplane.service tsm-admin.service
+
+[Install]
+WantedBy=multi-user.target

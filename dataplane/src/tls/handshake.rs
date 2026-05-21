@@ -15,6 +15,7 @@ use ring::{digest, rand::SystemRandom, signature};
 use super::hkdf::derive_secret;
 use super::keys::{KeySchedule, CipherSuite, AppKeys, HandshakeKeys, generate_x25519_keypair, x25519_agree};
 use super::record::{ContentType, RecordLayer};
+use super::ja3::{Ja3Fingerprint, ThreatMatch};
 
 // ── TLS handshake errors ──────────────────────────────────────────────────────
 
@@ -72,6 +73,9 @@ pub struct ServerHandshake {
     key_pair:   signature::EcdsaKeyPair,
     suite:      CipherSuite,
     rng:        SystemRandom,
+    /// JA3 fingerprint extracted from the client's ClientHello.
+    /// Populated after the first `process()` call; `None` until then.
+    ja3:        Option<Ja3Fingerprint>,
 }
 
 impl ServerHandshake {
@@ -93,6 +97,7 @@ impl ServerHandshake {
             key_pair,
             suite:      CipherSuite::Aes128Gcm,
             rng:        SystemRandom::new(),
+            ja3:        None,
         })
     }
 
@@ -118,7 +123,47 @@ impl ServerHandshake {
         }
     }
 
+    /// Return the JA3 fingerprint extracted from the client's ClientHello.
+    /// Available after the first `process()` call; `None` if not yet received
+    /// or if the record could not be parsed.
+    pub fn ja3_fingerprint(&self) -> Option<&Ja3Fingerprint> {
+        self.ja3.as_ref()
+    }
+
+    /// Return the known-bad threat match for this client's JA3, if any.
+    /// Returns `None` if the fingerprint is unknown or not yet parsed.
+    pub fn ja3_threat(&self) -> Option<ThreatMatch> {
+        self.ja3.as_ref()?.lookup_threat()
+    }
+
+    /// Return the JA3 hash hex string, or empty string if not yet known.
+    pub fn ja3_hash(&self) -> &str {
+        self.ja3.as_ref().map(|fp| fp.ja3_hash.as_str()).unwrap_or("")
+    }
+
+    /// Return the JA4 fingerprint string, or empty string if not yet known.
+    pub fn ja4(&self) -> &str {
+        self.ja3.as_ref().map(|fp| fp.ja4.as_str()).unwrap_or("")
+    }
+
     fn handle_client_hello(&mut self, data: &[u8]) -> Result<Vec<u8>, TlsError> {
+        // ── JA3/JA4 fingerprinting ─────────────────────────────────────────────
+        // Extract before updating the transcript so we operate on the raw record.
+        // Ja3Fingerprint::from_record() parses the TLS record layer wrapper;
+        // `data` here is the raw TLS record bytes received from the client.
+        self.ja3 = Ja3Fingerprint::from_record(data).ok();
+        if let Some(ref fp) = self.ja3 {
+            if fp.is_malicious() {
+                // Log the threat match — the pipeline layer decides whether to abort
+                // the connection (it calls ja3_threat() after process()).
+                crate::log_warn!("tls", "malicious TLS fingerprint detected";
+                    "ja3"    => fp.ja3_hash(),
+                    "threat" => fp.lookup_threat().map(|t| t.tool).unwrap_or("unknown"),
+                    "score"  => fp.risk_score()
+                );
+            }
+        }
+
         // Update transcript with ClientHello
         let msg = parse_handshake_message(data)?;
         if msg.msg_type != MSG_CLIENT_HELLO {

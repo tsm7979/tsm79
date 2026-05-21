@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 use serde_json;
 
 use crate::ai::AiRequest;
-use crate::audit::AuditLog;
+use crate::audit::{AuditLog, AuditSink, AuditEvent};
 use crate::config::Config;
 use crate::detect::{Detector, DetectVerdict, RedactSpan};
 use crate::http::{parse_request, ParseResult, build_response};
@@ -37,7 +37,8 @@ use crate::http::h1::find_double_crlf;
 use crate::metrics::{metrics, RecentRequest};
 use crate::policy::{Action, EvalContext, PolicyEngine};
 use crate::pool::ConnPool;
-use crate::route::{resolve_upstream, resolve_named, build_auth_headers};
+use crate::route::{resolve_upstream, resolve_named, build_auth_headers, SessionRouter, RoutePin, extract_session_id};
+use crate::tproxy::ConnContext;
 
 use std::collections::HashMap;
 
@@ -132,12 +133,18 @@ pub struct RequestContext<'a> {
 ///
 /// Returns `true` if the connection should be kept alive, `false` to close.
 pub fn handle_connection(
-    fd:           RawFd,
-    config:       Arc<Config>,
-    pool:         Arc<ConnPool>,
-    audit:        Arc<AuditLog>,
-    policy:       Arc<PolicyEngine>,
-    rate_limiter: Arc<RateLimiter>,
+    fd:                RawFd,
+    config:            Arc<Config>,
+    pool:              Arc<ConnPool>,
+    audit:             Arc<AuditLog>,
+    policy:            Arc<PolicyEngine>,
+    rate_limiter:      Arc<RateLimiter>,
+    pg_sink:           Option<Arc<AuditSink>>,
+    distributed_state: Arc<dyn crate::store::DistributedState>,
+    session_router:    Arc<SessionRouter>,
+    merkle_chain:      Arc<std::sync::Mutex<crate::audit::MerkleAuditChain>>,
+    ch_ingestor:       Option<Arc<crate::ingest::ClickHouseIngestor>>,
+    conn_ctx:          ConnContext,
 ) -> bool {
     let mut stream = unsafe { TcpStream::from_raw_fd(fd) };
 
@@ -156,6 +163,41 @@ pub fn handle_connection(
                 "application/json", b"{\"error\":\"request body exceeds 4 MB limit\"}");
             let _ = stream.write_all(&resp);
             return false;
+        }
+    };
+
+    // ── JA3/JA4 fingerprinting ─────────────────────────────────────────────────
+    // Probe the raw bytes for a TLS ClientHello record (content type 0x16).
+    // This fires on the *first* request of a connection — when a client opens
+    // a raw TLS socket directly to TSM rather than sending plaintext HTTP.
+    // On subsequent keep-alive iterations the bytes are HTTP, so the probe
+    // quietly produces None and we fall back to conn_ctx fields (which may have
+    // been pre-populated by a TLS acceptor layer above us).
+    let (conn_ja3_hash, conn_ja4): (String, String) = {
+        let from_buf = if buf.first() == Some(&0x16) {
+            crate::tls::Ja3Fingerprint::from_record(&buf).ok()
+        } else {
+            None
+        };
+        if let Some(ref fp) = from_buf {
+            if fp.is_malicious() {
+                crate::log_warn!("pipeline", "malicious TLS fingerprint — connection will be tracked";
+                    "ja3"    => fp.ja3_hash.as_str(),
+                    "ja4"    => fp.ja4.as_str(),
+                    "threat" => fp.lookup_threat()
+                                   .map(|t| t.tool)
+                                   .unwrap_or("unknown")
+                );
+            }
+            (fp.ja3_hash.clone(), fp.ja4.clone())
+        } else {
+            // Fall back to values pre-populated by a TLS acceptor layer (e.g., the
+            // MITM ServerHandshake path or an upstream TLS terminator that injects
+            // the fingerprint via ConnContext before calling handle_connection).
+            (
+                conn_ctx.ja3_hash.clone().unwrap_or_default(),
+                conn_ctx.ja4.clone().unwrap_or_default(),
+            )
         }
     };
 
@@ -216,7 +258,12 @@ pub fn handle_connection(
         return req.keep_alive();
     }
     if path == "/health" || path == "/healthz" {
-        let resp = build_response(200, "OK", "application/json", b"{\"status\":\"ok\"}");
+        let body = format!(
+            r#"{{"status":"ok","circuits":{{"openai":"{}","anthropic":"{}"}}}}"#,
+            pool.circuit_state("openai"),
+            pool.circuit_state("anthropic"),
+        );
+        let resp = build_response(200, "OK", "application/json", body.as_bytes());
         let _ = stream.write_all(&resp);
         return req.keep_alive();
     }
@@ -242,26 +289,84 @@ pub fn handle_connection(
     let model = ai_req.model().to_owned();
     let text  = ai_req.user_text();
 
-    // ── Fast-path detection ───────────────────────────────────────────────────
-    let detector     = Detector::new();
-    let fast_verdict = detector.scan(&text);
+    // Extract the W3C traceparent header (or synthesise one) for span correlation
+    let traceparent = trace_hdrs.get("traceparent")
+        .cloned()
+        .unwrap_or_else(|| format!("00-{}-{}-01", &request_id, &request_id[..16]));
 
-    // ── Python detector (Ambiguous only) ──────────────────────────────────────
+    // ── Stage: Classify (fast-path detector) ──────────────────────────────────
+    let fast_verdict = {
+        let _span = crate::telemetry::PipelineSpan::start(
+            crate::telemetry::Stage::Classify, &request_id, &traceparent);
+        let detector = Detector::new();
+        detector.scan(&text)
+    };
+
+    // ── Stage: ONNX INT8 (Ambiguous triage — <1 ms, no Python round-trip) ────────
+    // When the fast Rust detector returns Ambiguous, run the INT8 ONNX security
+    // classifier first. If it is confident (≥0.85) we resolve immediately.
+    // Only unconfident or escalation-worthy verdicts reach the Python service.
     let verdict = match &fast_verdict {
-        DetectVerdict::Ambiguous { .. } => {
-            let det_start = Instant::now();
-            let py_result = call_python_detector(
-                &config.detector_url, &text, &model, &org_id,
-                &trace_hdrs, config.detector_timeout_ms,
-            );
-            metrics().record_detector_call(det_start.elapsed().as_secs_f64() * 1000.0);
-            py_result.unwrap_or(fast_verdict)
+        DetectVerdict::Ambiguous { risk_score: fast_risk, .. } => {
+            let onnx_start = Instant::now();
+            let onnx = crate::detect::onnx_engine::classify(&text);
+            let onnx_us = onnx_start.elapsed().as_micros() as u64;
+
+            if onnx.is_actionable() {
+                // ONNX is confident — convert to DetectVerdict without Python
+                use crate::detect::onnx_engine::SecurityLabel;
+                match onnx.label {
+                    SecurityLabel::Clean => {
+                        log_debug!("pipeline", "ONNX resolved Ambiguous → Clean";
+                            "confidence" => onnx.confidence,
+                            "latency_us" => onnx_us
+                        );
+                        DetectVerdict::Clean
+                    }
+                    SecurityLabel::Jailbreak => DetectVerdict::Block {
+                        pii_types:  vec!["JAILBREAK".to_owned()],
+                        risk_score: (onnx.risk_score as f64 * 100.0).min(100.0),
+                        severity:   "critical".to_owned(),
+                        spans:      vec![],
+                    },
+                    SecurityLabel::PiiLeak => DetectVerdict::Ambiguous {
+                        risk_score: (onnx.risk_score as f64 * 100.0).max(*fast_risk),
+                        reason:     crate::detect::AmbiguousReason::NerKeywords,
+                    },
+                    SecurityLabel::SecretExposure => DetectVerdict::Block {
+                        pii_types:  vec!["ENCODED_SECRET".to_owned()],
+                        risk_score: (onnx.risk_score as f64 * 100.0).min(100.0),
+                        severity:   "critical".to_owned(),
+                        spans:      vec![],
+                    },
+                }
+            } else if onnx.needs_escalation() {
+                // ONNX uncertain — escalate to Python
+                let _span = crate::telemetry::PipelineSpan::start(
+                    crate::telemetry::Stage::PyDetector, &request_id, &traceparent);
+                let det_start = Instant::now();
+                let py_result = call_python_detector(
+                    &config.detector_url, &text, &model, &org_id,
+                    &trace_hdrs, config.detector_timeout_ms,
+                );
+                metrics().record_detector_call(det_start.elapsed().as_secs_f64() * 1000.0);
+                py_result.unwrap_or_else(|| fast_verdict.clone())
+            } else {
+                // ONNX says low risk, no escalation needed
+                DetectVerdict::Clean
+            }
         }
         other => other.clone(),
     };
 
-    // ── Policy evaluation ─────────────────────────────────────────────────────
-    let (pii_types, risk_score, spans) = extract_verdict_metadata(&verdict);
+    // ── Stage: Policy ─────────────────────────────────────────────────────────
+    let (pii_types, risk_score, spans) = {
+        let _span = crate::telemetry::PipelineSpan::start(
+            crate::telemetry::Stage::Policy, &request_id, &traceparent);
+
+        let meta = extract_verdict_metadata(&verdict);
+        meta
+    };
     let severity = crate::detect::Severity::from_risk(risk_score).as_str().to_owned();
     let eval_ctx = EvalContext {
         pii_types:  pii_types.clone(),
@@ -272,6 +377,63 @@ pub fn handle_connection(
         metadata:   HashMap::new(),
     };
     let policy_result = policy.evaluate(&eval_ctx);
+
+    // ── Session-pinned deterministic routing (Gap 9 fix) ─────────────────────
+    // Extract session ID from request headers/body for conversation continuity.
+    // Once a session is pinned to local (due to sensitive content), it stays
+    // local for ALL subsequent turns — prevents context fragmentation.
+    let session_id = {
+        let all_headers: Vec<(Vec<u8>, Vec<u8>)> = req.headers.iter()
+            .map(|h| (h.name.to_vec(), h.value.to_vec()))
+            .collect();
+        let auth_token = req.header("authorization")
+            .map(|h| h.value_str())
+            .unwrap_or("");
+        extract_session_id(&all_headers, req.body, auth_token, req.path)
+    };
+
+    let is_sensitive = matches!(&policy_result.action, Action::Block { .. } | Action::RouteLocal);
+
+    // ── Session pinning via distributed state (Redis if available) ────────────
+    // Use distributed_state for cross-node session consistency. The in-memory
+    // session_router is kept as the in-process authoritative view for this node;
+    // distributed_state synchronises across the cluster.
+    let session_pin = {
+        let dist_pin = distributed_state.session_pin(&session_id, is_sensitive);
+        // Also record in the local session router so this node's in-memory view
+        // stays consistent (avoids a second Redis round-trip on keep-alive).
+        session_router.route(&session_id, is_sensitive);
+        dist_pin
+    };
+
+    // Override policy action to RouteLocal if session is pinned local
+    let policy_result = if session_pin == RoutePin::Local
+        && matches!(&policy_result.action, Action::Allow)
+    {
+        // Session was previously flagged — force local routing for continuity
+        crate::policy::PolicyResult {
+            action:    Action::RouteLocal,
+            rule_name: "session-pinned-local".to_owned(),
+        }
+    } else {
+        policy_result
+    };
+
+    // ── Merkle audit chain entry ──────────────────────────────────────────────
+    // Append every request to the tamper-evident Merkle chain.
+    // This runs after policy evaluation so the action is known.
+    {
+        let action_str = match &policy_result.action {
+            Action::Allow      => "allow",
+            Action::Block { .. }=> "block",
+            Action::Redact     => "redact",
+            Action::RouteLocal => "route_local",
+            _                  => "allow",
+        };
+        if let Ok(mut chain) = merkle_chain.lock() {
+            chain.push(&session_id, action_str);
+        }
+    }
 
     // ── Final action ──────────────────────────────────────────────────────────
     let final_action = match &policy_result.action {
@@ -289,7 +451,7 @@ pub fn handle_connection(
         metrics().record_fastpath_hit(pt);
     }
 
-    // ── Audit log ─────────────────────────────────────────────────────────────
+    // ── Audit log (JSONL chain) ───────────────────────────────────────────────
     let _ = audit.append(
         request_id.clone(),
         org_id.clone(),
@@ -301,18 +463,128 @@ pub fn handle_connection(
         client_ip.clone(),
     );
 
-    // ── Structured access log ─────────────────────────────────────────────────
+    // ── Audit sink (PostgreSQL + Kafka) ───────────────────────────────────────
+    if let Some(ref sink) = pg_sink {
+        let redact_spans_json = {
+            let arr: Vec<_> = spans.iter()
+                .map(|s| format!("{{\"start\":{},\"end\":{},\"type\":{:?}}}", s.start, s.end, s.pii_type))
+                .collect();
+            format!("[{}]", arr.join(","))
+        };
+        let method_str = std::str::from_utf8(req.method).unwrap_or("POST");
+        let path_str   = std::str::from_utf8(req.path).unwrap_or("/");
+        let upstream_target = resolve_upstream(&model);
+        let upstream_key = upstream_target.name;
+
+        // Derive prev_hash from the JSONL audit chain (last known hash)
+        let (prev_h, entry_h) = audit.last_hashes();
+        let event = AuditEvent {
+            org_id:            config.org_id.clone(),
+            workspace_id:      config.workspace_id.clone(),
+            request_id:        request_id.clone(),
+            node_id:           config.node_id.clone(),
+            client_ip:         client_ip.clone(),
+            method:            method_str.to_owned(),
+            path:              path_str.to_owned(),
+            model:             model.clone(),
+            upstream:          upstream_key.to_string(),
+            action:            final_action.to_owned(),
+            rule_fired:        policy_result.rule_name.clone(),
+            pii_types:         pii_types.clone(),
+            risk_score,
+            severity:          severity.clone(),
+            streamed:          false,
+            redacted:          final_action == "redact",
+            redact_spans_json,
+            latency_ms,
+            detector_ms:       0.0,
+            upstream_ms:       0.0,
+            prompt_tokens:     0,
+            completion_tokens: 0,
+            prev_hash:         prev_h,
+            entry_hash:        entry_h,
+            traceparent:       traceparent.clone(),
+            tags_json:         "{}".to_owned(),
+            spans_json:        "[]".to_owned(),
+        };
+        sink.submit(event);
+    }
+
+    // ── ClickHouse ingest (non-blocking, fire-and-forget) ─────────────────────
+    // Pushes one row into the bounded MPSC channel. The background thread
+    // batches and POSTs to ClickHouse. try_send() never blocks the hot path.
+    if let Some(ref ch) = ch_ingestor {
+        let (merkle_epoch, merkle_leaf) = {
+            merkle_chain.lock()
+                .map(|c| (c.current_epoch() as u32, c.current_leaf() as u32))
+                .unwrap_or((0, 0))
+        };
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        let event = crate::ingest::AiRequestEvent {
+            timestamp_ms:        now_ms,
+            request_id:          request_id.clone(),
+            session_id:          session_id.clone(),
+            org_id:              org_id.clone(),
+            workspace_id:        config.workspace_id.clone(),
+            node_id:             config.node_id.clone(),
+            model:               model.clone(),
+            provider:            infer_provider(&model),
+            action:              final_action.to_owned(),
+            pii_types:           pii_types.clone(),
+            risk_score:          risk_score as f32,
+            severity:            severity.clone(),
+            policy_rule:         policy_result.rule_name.clone(),
+            detection_stage:     infer_detection_stage(&fast_verdict),
+            detection_latency_us: (latency_ms * 1000.0) as u32,
+            client_ip:           client_ip.clone(),
+            ja3_hash:            conn_ja3_hash,
+            ja4:                 conn_ja4,
+            is_tor:              false,
+            tls_version:         String::new(),
+            original_dst_ip:     conn_ctx.original_dst
+                                    .map(|a| a.ip().to_string())
+                                    .unwrap_or_default(),
+            original_dst_port:   conn_ctx.original_dst
+                                    .map(|a| a.port())
+                                    .unwrap_or(0),
+            route_pin:           format!("{:?}", session_pin).to_lowercase(),
+            session_sensitive:   is_sensitive,
+            request_bytes:       buf.len() as u32,
+            response_bytes:      0,               // filled by forward path
+            total_latency_ms:    latency_ms as u32,
+            upstream_latency_ms: 0,               // filled by forward path
+            output_clean:        true,
+            output_threat_type:  String::new(),
+            threat_intel_score:  0.0,
+            ioc_match:           false,
+            merkle_epoch,
+            merkle_leaf_index:   merkle_leaf,
+            circuit_state:       pool.circuit_state(upstream_target.name).to_owned(),
+        };
+        ch.ingest(event);
+    }
+
+    // ── Stage: Respond — emit structured access log ───────────────────────────
+    let _respond_span = crate::telemetry::PipelineSpan::start(
+        crate::telemetry::Stage::Respond, &request_id, &traceparent);
+
     crate::telemetry::RequestLog {
-        request_id: &request_id,
-        method:     req.method,
-        path:       req.path,
-        status:     if final_action == "block" { 400 } else { 200 },
-        action:     final_action,
-        pii_types:  &pii_types,
+        request_id:  &request_id,
+        method:      req.method,
+        path:        req.path,
+        status:      if final_action == "block" { 400 } else { 200 },
+        action:      final_action,
+        rule_fired:  &policy_result.rule_name,
+        pii_types:   &pii_types,
         risk_score,
         latency_ms,
-        upstream:   req.path,   // filled in more precisely in forward_request
-        client_ip:  &client_ip,
+        upstream:    req.path,
+        client_ip:   &client_ip,
+        traceparent: &traceparent,
     }.emit();
 
     // ── Metrics ───────────────────────────────────────────────────────────────
@@ -349,19 +621,23 @@ pub fn handle_connection(
                 _ => text.clone(),
             };
             let redacted_body = ai_req.redacted_bytes(&redacted_text);
-            forward_request(stream, &ai_req, &redacted_body, &model, &trace_hdrs, &config, &pool)
+            forward_request(stream, &ai_req, &redacted_body, &model, &trace_hdrs, &config, &pool,
+                            &request_id, final_action)
         }
         Action::RouteLocal => {
             let target = resolve_named("ollama").or_else(|| resolve_named("local"));
             if let Some(t) = target {
-                forward_to_target(stream, t, req.body, &trace_hdrs, &config, &pool)
+                forward_to_target(stream, t, req.body, &trace_hdrs, &config, &pool,
+                                  &request_id, final_action)
             } else {
-                forward_request(stream, &ai_req, req.body, &model, &trace_hdrs, &config, &pool)
+                forward_request(stream, &ai_req, req.body, &model, &trace_hdrs, &config, &pool,
+                                &request_id, final_action)
             }
         }
         _ => {
             // Allow
-            forward_request(stream, &ai_req, req.body, &model, &trace_hdrs, &config, &pool)
+            forward_request(stream, &ai_req, req.body, &model, &trace_hdrs, &config, &pool,
+                            &request_id, final_action)
         }
     }
 }
@@ -449,29 +725,33 @@ fn parse_content_length(headers: &[u8]) -> Option<usize> {
 // ── Upstream forwarding ───────────────────────────────────────────────────────
 
 fn forward_request(
-    mut client: TcpStream,
-    ai_req:     &AiRequest,
-    body:       &[u8],
-    model:      &str,
-    trace_hdrs: &HashMap<String, String>,
-    config:     &Config,
-    pool:       &ConnPool,
+    mut client:  TcpStream,
+    ai_req:      &AiRequest,
+    body:        &[u8],
+    model:       &str,
+    trace_hdrs:  &HashMap<String, String>,
+    config:      &Config,
+    pool:        &ConnPool,
+    request_id:  &str,
+    action:      &str,
 ) -> bool {
     let target = resolve_upstream(model);
-    forward_to_target(client, target, body, trace_hdrs, config, pool)
+    forward_to_target(client, target, body, trace_hdrs, config, pool, request_id, action)
 }
 
 fn forward_to_target(
-    mut client: TcpStream,
-    target:     &'static crate::route::UpstreamTarget,
-    body:       &[u8],
-    trace_hdrs: &HashMap<String, String>,
-    config:     &Config,
-    pool:       &ConnPool,
+    mut client:  TcpStream,
+    target:      &'static crate::route::UpstreamTarget,
+    body:        &[u8],
+    trace_hdrs:  &HashMap<String, String>,
+    config:      &Config,
+    pool:        &ConnPool,
+    request_id:  &str,
+    action:      &str,
 ) -> bool {
-    // Build the upstream HTTP/1.1 request
+    // Build the upstream HTTP/1.1 request (include X-TSM-Trace-ID for upstream observability)
     let auth_hdrs = build_auth_headers(target);
-    let req_buf   = build_upstream_request(target, body, &auth_hdrs, trace_hdrs);
+    let req_buf   = build_upstream_request(target, body, &auth_hdrs, trace_hdrs, request_id);
 
     // Acquire a pooled connection
     let mut guard = match pool.acquire(target) {
@@ -508,15 +788,23 @@ fn forward_to_target(
         }
     };
 
+    // Inject TSM tracing headers into the upstream response before forwarding to client
+    let tagged_headers = inject_tsm_response_headers(&header_bytes, request_id, action);
+
     if is_chunked || is_sse {
         // Streaming: forward in a continuous loop until upstream closes or [DONE]
-        let ok = forward_streaming_response(&mut upstream, &mut client, &header_bytes);
+        let upstream_kind = if target.name == "anthropic" {
+            crate::ai::sse::UpstreamKind::Anthropic
+        } else {
+            crate::ai::sse::UpstreamKind::OpenAI
+        };
+        let ok = forward_streaming_response(&mut upstream, &mut client, &tagged_headers, upstream_kind);
         guard.mark_unhealthy(); // streaming connections are not reused
         std::mem::forget(upstream);
         ok
     } else {
         // Non-streaming: headers are the full response (body was read too)
-        let _ = client.write_all(&header_bytes);
+        let _ = client.write_all(&tagged_headers);
         std::mem::forget(upstream);
         true
     }
@@ -554,43 +842,58 @@ fn read_upstream_headers(upstream: &mut TcpStream) -> Option<(Vec<u8>, bool, boo
     Some((buf, is_chunked, is_sse))
 }
 
-/// Stream an upstream SSE or chunked response to the client in real time.
+/// Stream an upstream SSE or chunked response to the client.
 ///
-/// Forwards 8 KB at a time, parsing SSE events via `crate::ai::sse::parse_events`.
-/// Stops when the upstream closes the connection or a `[DONE]` sentinel is found.
+/// Uses `SseRedactBuffer` to detect and redact PII in the token stream.
+/// Events safely past the 200-char lookahead window are forwarded immediately;
+/// the tail is scanned and potentially redacted when [DONE] arrives.
 fn forward_streaming_response(
-    upstream: &mut TcpStream,
-    client:   &mut TcpStream,
+    upstream:     &mut TcpStream,
+    client:       &mut TcpStream,
     header_bytes: &[u8],
+    kind:         crate::ai::sse::UpstreamKind,
 ) -> bool {
-    use crate::ai::sse::parse_events;
+    use crate::ai::sse::{parse_events, SseRedactBuffer};
 
-    // Forward headers to client first
+    // Forward (already-tagged) headers to client first
     if client.write_all(header_bytes).is_err() {
         return false;
     }
 
-    let mut leftover: Vec<u8> = Vec::new();
-    let mut tmp = [0u8; 8192];
+    let mut buf   = SseRedactBuffer::new();
+    let mut raw   = Vec::<u8>::new();
+    let mut tmp   = [0u8; 8192];
 
     loop {
         let n = match upstream.read(&mut tmp) {
             Ok(0) | Err(_) => break,
             Ok(n) => n,
         };
-        leftover.extend_from_slice(&tmp[..n]);
+        raw.extend_from_slice(&tmp[..n]);
 
-        // Forward raw bytes to client immediately (low latency)
-        if client.write_all(&tmp[..n]).is_err() {
-            return false;
+        // Parse complete SSE events out of the buffer
+        let (events, consumed) = parse_events(&raw);
+        raw.drain(..consumed);
+
+        let mut done = false;
+        for ev in events {
+            if ev.is_done() {
+                // Flush the lookahead tail (with redaction if needed) then send [DONE]
+                for safe_ev in buf.flush_done() {
+                    if client.write_all(&safe_ev.encode()).is_err() { return false; }
+                }
+                if client.write_all(&ev.encode()).is_err() { return false; }
+                done = true;
+                break;
+            }
+
+            // Push to redact buffer; forward immediately-safe events
+            for safe_ev in buf.push(ev, kind) {
+                if client.write_all(&safe_ev.encode()).is_err() { return false; }
+            }
         }
 
-        // Parse events to detect the [DONE] sentinel
-        let (events, consumed) = parse_events(&leftover);
-        let done = events.iter().any(|e| e.is_done());
-        leftover.drain(..consumed);
-
-        if done || leftover.len() > 1_048_576 {
+        if done || raw.len() > 1_048_576 {
             break;
         }
     }
@@ -598,11 +901,43 @@ fn forward_streaming_response(
     true
 }
 
+// ── TSM response header injection ─────────────────────────────────────────────
+
+/// Inject `X-TSM-Trace-ID` and `X-TSM-Action-Taken` into an upstream HTTP
+/// response buffer before forwarding it to the client.
+///
+/// Finds the `\r\n\r\n` header terminator and inserts the two headers just
+/// before it, so the client always sees which request ID was assigned and what
+/// action TSM took (allow / redact / block / route_local).
+fn inject_tsm_response_headers(headers: &[u8], request_id: &str, action: &str) -> Vec<u8> {
+    use crate::http::h1::find_double_crlf;
+    if let Some(end) = find_double_crlf(headers) {
+        let mut out = Vec::with_capacity(headers.len() + 128);
+        // Everything up to (and including) the last header line's \r\n
+        out.extend_from_slice(&headers[..end + 2]);
+        // Inject TSM tracing headers
+        out.extend_from_slice(b"X-TSM-Trace-ID: ");
+        out.extend_from_slice(request_id.as_bytes());
+        out.extend_from_slice(b"\r\nX-TSM-Action-Taken: ");
+        out.extend_from_slice(action.as_bytes());
+        out.extend_from_slice(b"\r\n");
+        // Blank line that terminates headers
+        out.extend_from_slice(b"\r\n");
+        // Any body bytes already buffered alongside headers
+        out.extend_from_slice(&headers[end + 4..]);
+        out
+    } else {
+        // Malformed response: pass through as-is
+        headers.to_vec()
+    }
+}
+
 fn build_upstream_request(
     target:     &crate::route::UpstreamTarget,
     body:       &[u8],
     auth_hdrs:  &[(String, String)],
     trace_hdrs: &HashMap<String, String>,
+    request_id: &str,
 ) -> Vec<u8> {
     let mut req = Vec::with_capacity(512 + body.len());
     req.extend_from_slice(b"POST ");
@@ -611,6 +946,10 @@ fn build_upstream_request(
     req.extend_from_slice(target.host.as_bytes());
     req.extend_from_slice(b"\r\nContent-Type: application/json\r\nContent-Length: ");
     req.extend_from_slice(body.len().to_string().as_bytes());
+    req.extend_from_slice(b"\r\n");
+    // Propagate TSM trace ID to upstream for end-to-end traceability
+    req.extend_from_slice(b"X-TSM-Trace-ID: ");
+    req.extend_from_slice(request_id.as_bytes());
     req.extend_from_slice(b"\r\n");
     for (k, v) in auth_hdrs {
         req.extend_from_slice(k.as_bytes());
@@ -834,4 +1173,44 @@ fn unix_now() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+/// Map a model name to its AI provider label for ClickHouse.
+fn infer_provider(model: &str) -> String {
+    if model.starts_with("gpt") || model.starts_with("o1") || model.starts_with("o3") {
+        "openai"
+    } else if model.starts_with("claude") {
+        "anthropic"
+    } else if model.starts_with("gemini") || model.starts_with("palm") {
+        "google"
+    } else if model.starts_with("mistral") || model.starts_with("mixtral") {
+        "mistral"
+    } else if model.starts_with("command") {
+        "cohere"
+    } else if model.contains("llama") || model.contains("ollama") {
+        "local"
+    } else {
+        "unknown"
+    }
+    .to_owned()
+}
+
+/// Which detection stage resolved the verdict (for ClickHouse observability).
+fn infer_detection_stage(verdict: &DetectVerdict) -> String {
+    match verdict {
+        DetectVerdict::Clean                  => "prefilter",
+        DetectVerdict::Block { pii_types, .. } => {
+            if pii_types.iter().any(|t| t.starts_with("BPE:")) {
+                "bpe"
+            } else if pii_types.iter().any(|t| t == "JAILBREAK") {
+                "regex"
+            } else {
+                "regex"
+            }
+        }
+        DetectVerdict::Redact { .. }          => "regex",
+        DetectVerdict::RouteLocal { .. }      => "regex",
+        DetectVerdict::Ambiguous { .. }       => "tier1",
+    }
+    .to_owned()
 }

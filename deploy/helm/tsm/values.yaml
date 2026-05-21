@@ -72,6 +72,36 @@ secrets:
   openaiApiKey: ""
   anthropicApiKey: ""
   webhookUrl: ""
+  # Threat-intel feed API keys (leave empty to disable the respective feed)
+  nvdApiKey: ""          # NVD — optional, raises rate limit
+  abuseipdbKey: ""       # AbuseIPDB — required for IP reputation feed
+  otxApiKey: ""          # AlienVault OTX — required for IOC feed
+  # Infrastructure secrets
+  redisPassword: ""      # Required when Redis auth is enabled
+  clickhousePassword: "" # Required when ClickHouse is enabled
+
+threatIntel:
+  enabled: true
+  image:
+    repository: ghcr.io/tsm7979/tsm-threat-intel
+    tag: "2.0.0"
+    pullPolicy: IfNotPresent
+  port: 9100
+  logLevel: info
+  resources:
+    requests: { cpu: "50m",  memory: "64Mi" }
+    limits:   { cpu: "200m", memory: "256Mi" }
+
+clickhouse:
+  enabled: true
+  image:
+    repository: clickhouse/clickhouse-server
+    tag: "24.3-alpine"
+    pullPolicy: IfNotPresent
+  storage: 50Gi
+  resources:
+    requests: { cpu: "200m", memory: "512Mi" }
+    limits:   { cpu: "2000m", memory: "4Gi" }
 
 autoscaling:
   enabled: false

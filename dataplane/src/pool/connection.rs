@@ -17,6 +17,7 @@ use std::os::unix::io::{FromRawFd, IntoRawFd, RawFd};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::pool::circuit::{CircuitBreaker, CircuitDecision, Outcome};
 use crate::route::UpstreamTarget;
 use crate::tls::AppKeys;
 use crate::tls::keys::CipherSuite;
@@ -104,6 +105,15 @@ impl ConnGuard {
 impl Drop for ConnGuard {
     fn drop(&mut self) {
         if !self.healthy {
+            // Record the failure in the circuit breaker before discarding.
+            if let Some(ref conn) = self.inner {
+                // SAFETY: pool pointer is valid for the lifetime of this guard
+                unsafe {
+                    (*self.pool).circuits.lock().unwrap()
+                        .get(conn.upstream)
+                        .map(|cb| cb.record(Outcome::Failure));
+                }
+            }
             return; // PooledConn::drop() will close the fd
         }
         if let Some(mut conn) = self.inner.take() {
@@ -138,6 +148,8 @@ pub struct ConnPool {
     /// Map from upstream name → idle connections (LIFO stack)
     pools:    Mutex<HashMap<&'static str, Vec<PooledConn>>>,
     max_idle: usize,
+    /// Per-upstream circuit breakers (created on first use)
+    circuits: Mutex<HashMap<&'static str, CircuitBreaker>>,
 }
 
 impl ConnPool {
@@ -145,13 +157,35 @@ impl ConnPool {
         ConnPool {
             pools:    Mutex::new(HashMap::new()),
             max_idle,
+            circuits: Mutex::new(HashMap::new()),
         }
     }
 
+    /// Circuit state for an upstream (for /health reporting).
+    pub fn circuit_state(&self, upstream: &str) -> &'static str {
+        let circuits = self.circuits.lock().unwrap();
+        circuits.get(upstream).map(|cb| cb.state_name()).unwrap_or("closed")
+    }
+
     /// Acquire a connection to the named upstream.
+    /// Checks the circuit breaker first — returns Err(NoHealthySlot) if open.
     /// Pops an idle connection if available and non-expired, otherwise opens a new one.
     pub fn acquire(&self, target: &'static UpstreamTarget) -> Result<ConnGuard, PoolError> {
-        // Try to pop an idle connection
+        // ── Circuit breaker check ─────────────────────────────────────────────
+        {
+            let mut circuits = self.circuits.lock().unwrap();
+            let cb = circuits.entry(target.name).or_insert_with(|| CircuitBreaker::new(target.name));
+            match cb.check() {
+                CircuitDecision::Allow => {}
+                CircuitDecision::Reject { reason } => {
+                    eprintln!("[pool] circuit {}: rejected — {}", target.name, reason);
+                    crate::metrics::metrics().record_rate_limited(); // reuse the rate-limited counter for circuit-blocked
+                    return Err(PoolError::NoHealthySlot);
+                }
+            }
+        }
+
+        // ── Try to pop an idle connection ─────────────────────────────────────
         {
             let mut pools = self.pools.lock().unwrap();
             let queue     = pools.entry(target.name).or_default();
@@ -164,6 +198,10 @@ impl ConnPool {
                 }
             }
             if let Some(conn) = queue.pop() {
+                // Idle reuse counts as a success for the circuit breaker
+                self.circuits.lock().unwrap()
+                    .get(target.name)
+                    .map(|cb| cb.record(Outcome::Success));
                 return Ok(ConnGuard {
                     inner:   Some(conn),
                     pool:    self as *const ConnPool,
@@ -172,8 +210,21 @@ impl ConnPool {
             }
         }
 
-        // No idle connection — open a new one
-        self.open_connection(target)
+        // ── No idle connection — open a new one ───────────────────────────────
+        match self.open_connection(target) {
+            Ok(guard) => {
+                self.circuits.lock().unwrap()
+                    .get(target.name)
+                    .map(|cb| cb.record(Outcome::Success));
+                Ok(guard)
+            }
+            Err(e) => {
+                self.circuits.lock().unwrap()
+                    .get(target.name)
+                    .map(|cb| cb.record(Outcome::Failure));
+                Err(e)
+            }
+        }
     }
 
     fn open_connection(&self, target: &'static UpstreamTarget) -> Result<ConnGuard, PoolError> {

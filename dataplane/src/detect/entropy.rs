@@ -133,7 +133,10 @@ pub fn entropy_verdict(text: &str) -> EntropyVerdict {
         };
     }
 
-    let top = all_hits.iter().max_by(|a, b| a.entropy.partial_cmp(&b.entropy).unwrap()).unwrap();
+    let top = match all_hits.iter().max_by(|a, b| a.entropy.partial_cmp(&b.entropy).unwrap_or(std::cmp::Ordering::Equal)) {
+        Some(t) => t,
+        None => return EntropyVerdict { high_entropy_found: false, max_entropy: 0.0, risk_contribution: 0.0, top_token: None },
+    };
     let max_ent = top.entropy;
 
     // Risk contribution: scale from 0 to 30 between 4.5 and 6.5 bits/char

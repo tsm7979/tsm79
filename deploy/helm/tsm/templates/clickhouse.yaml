@@ -1,0 +1,116 @@
+{{- if .Values.clickhouse.enabled }}
+{{/* ── ClickHouse StatefulSet ──────────────────────────────────────────────── */}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-clickhouse
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  serviceName: {{ .Release.Name }}-clickhouse-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: clickhouse
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: clickhouse
+    spec:
+      containers:
+        - name: clickhouse
+          image: "{{ .Values.clickhouse.image.repository }}:{{ .Values.clickhouse.image.tag }}"
+          imagePullPolicy: {{ .Values.clickhouse.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8123
+            - name: native
+              containerPort: 9000
+          env:
+            - name: CLICKHOUSE_DB
+              value: tsm
+            - name: CLICKHOUSE_USER
+              value: tsm
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: clickhouse-password
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: schema
+              mountPath: /docker-entrypoint-initdb.d/schema.sql
+              subPath: schema.sql
+          resources:
+            {{- toYaml .Values.clickhouse.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: schema
+          configMap:
+            name: {{ .Release.Name }}-clickhouse-schema
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.clickhouse.storage }}
+---
+{{/* ── ClickHouse Headless Service (for StatefulSet DNS) ─────────────────── */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-clickhouse-headless
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: clickhouse
+  ports:
+    - name: http
+      port: 8123
+    - name: native
+      port: 9000
+---
+{{/* ── ClickHouse ClusterIP Service ────────────────────────────────────────── */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-clickhouse
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: http
+    - name: native
+      port: 9000
+      targetPort: native
+{{- end }}

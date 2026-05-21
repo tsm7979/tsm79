@@ -32,6 +32,7 @@ type Store struct {
 	mu       sync.RWMutex
 	current  *Snapshot
 	history  []*Snapshot // last 10 snapshots
+	onPut    func(*Snapshot) // optional persistence hook
 }
 
 func NewStore() *Store {
@@ -53,10 +54,17 @@ func (s *Store) Current() *Snapshot {
 	return s.current
 }
 
+// OnPut registers a hook called after every successful Put/PatchRule/DeleteRule.
+// Called with the mutex released.  Thread-safe.
+func (s *Store) OnPut(fn func(*Snapshot)) {
+	s.mu.Lock()
+	s.onPut = fn
+	s.mu.Unlock()
+}
+
 // Put replaces the active ruleset with `rules` and increments the version.
 func (s *Store) Put(rules []Rule) *Snapshot {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	snap := &Snapshot{
 		Version:   s.current.Version + 1,
 		UpdatedAt: time.Now().UTC(),
@@ -67,13 +75,17 @@ func (s *Store) Put(rules []Rule) *Snapshot {
 	if len(s.history) > 10 {
 		s.history = s.history[len(s.history)-10:]
 	}
+	hook := s.onPut
+	s.mu.Unlock()
+	if hook != nil {
+		hook(snap)
+	}
 	return snap
 }
 
 // PatchRule adds or replaces a single named rule without touching others.
 func (s *Store) PatchRule(rule Rule) *Snapshot {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	rules := make([]Rule, 0, len(s.current.Rules)+1)
 	patched := false
 	for _, r := range s.current.Rules {
@@ -97,13 +109,17 @@ func (s *Store) PatchRule(rule Rule) *Snapshot {
 	if len(s.history) > 10 {
 		s.history = s.history[len(s.history)-10:]
 	}
+	hook := s.onPut
+	s.mu.Unlock()
+	if hook != nil {
+		hook(snap)
+	}
 	return snap
 }
 
 // DeleteRule removes a rule by name, incrementing the version.
 func (s *Store) DeleteRule(name string) (*Snapshot, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	rules := make([]Rule, 0, len(s.current.Rules))
 	deleted := false
 	for _, r := range s.current.Rules {
@@ -114,6 +130,7 @@ func (s *Store) DeleteRule(name string) (*Snapshot, bool) {
 		}
 	}
 	if !deleted {
+		s.mu.Unlock()
 		return s.current, false
 	}
 	snap := &Snapshot{
@@ -122,6 +139,11 @@ func (s *Store) DeleteRule(name string) (*Snapshot, bool) {
 		Rules:     rules,
 	}
 	s.current = snap
+	hook := s.onPut
+	s.mu.Unlock()
+	if hook != nil {
+		hook(snap)
+	}
 	return snap, true
 }
 

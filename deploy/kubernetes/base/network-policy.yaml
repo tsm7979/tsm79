@@ -1,0 +1,206 @@
+# TSM Egress Lockdown — Kubernetes NetworkPolicy
+#
+# Architecture:
+#   All AI traffic MUST flow through the TSM dataplane proxy.
+#   Direct egress from application pods to external AI APIs (OpenAI, Anthropic,
+#   etc.) is blocked at the network layer — enforcement independent of application
+#   code changes or misconfiguration.
+#
+# Policies defined here:
+#
+#   1. tsm-dataplane-egress        — allows the TSM dataplane to reach upstream
+#                                    AI APIs on port 443 (TLS only)
+#   2. tsm-default-deny-ai-egress  — blocks all pods (except the dataplane) from
+#                                    directly reaching external port 443
+#   3. tsm-internal-only           — application pods may only reach the TSM
+#                                    dataplane within the cluster
+#   4. tsm-control-plane-egress    — allows the Go control plane to reach
+#                                    registered dataplanes for health checks
+#   5. tsm-detector-internal       — allows the Python detector to receive inbound
+#                                    traffic only from the dataplane pods
+#
+# Requirements:
+#   - A CNI plugin that enforces NetworkPolicy: Calico, Cilium, or Weave Net
+#   - Pods must carry the labels used in selectors below
+#   - Required labels:
+#       app.kubernetes.io/part-of: tsm
+#       tsm.io/role: dataplane | detector | control-plane | app
+#
+# Apply:
+#   kubectl apply -k deploy/kubernetes/base/
+
+---
+# ── 1. TSM Dataplane may egress to upstream AI APIs on port 443 ───────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tsm-dataplane-egress
+  namespace: tsm
+  labels:
+    app.kubernetes.io/part-of: tsm
+    tsm.io/policy-type: egress-lockdown
+spec:
+  podSelector:
+    matchLabels:
+      tsm.io/role: dataplane
+  policyTypes:
+    - Egress
+  egress:
+    # Allow TLS egress to any external IP on port 443 (upstream AI APIs)
+    - ports:
+        - protocol: TCP
+          port: 443
+    # Allow DNS resolution
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow intra-cluster communication (to detector and control-plane)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: tsm
+      ports:
+        - protocol: TCP
+          port: 8000  # Python detector
+        - protocol: TCP
+          port: 9090  # Go control plane
+        - protocol: TCP
+          port: 50051 # gRPC detector
+
+---
+# ── 2. Default deny: block direct AI API egress from application pods ─────────
+#
+# This is the critical enforcement policy.  Any pod that does NOT have the
+# tsm.io/role=dataplane label cannot reach port 443 externally.
+# Attempting to call api.openai.com directly will be silently dropped.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tsm-default-deny-external-egress
+  namespace: tsm
+  labels:
+    app.kubernetes.io/part-of: tsm
+    tsm.io/policy-type: egress-lockdown
+spec:
+  podSelector:
+    matchExpressions:
+      - key: tsm.io/role
+        operator: NotIn
+        values:
+          - dataplane
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS so pods can still resolve hostnames
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow intra-cluster traffic only (to TSM proxy and internal services)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: tsm
+    # Allow egress to the same namespace (internal services)
+    - to:
+        - podSelector: {}
+    # NOTE: Port 443 is NOT listed → blocked for all non-dataplane pods
+
+---
+# ── 3. Application pods may only reach the TSM dataplane ──────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tsm-app-to-dataplane-only
+  namespace: tsm
+  labels:
+    app.kubernetes.io/part-of: tsm
+    tsm.io/policy-type: ingress-control
+spec:
+  podSelector:
+    matchLabels:
+      tsm.io/role: app
+  policyTypes:
+    - Egress
+  egress:
+    # App pods may reach the TSM dataplane on its proxy port
+    - to:
+        - podSelector:
+            matchLabels:
+              tsm.io/role: dataplane
+      ports:
+        - protocol: TCP
+          port: 8080  # TSM dataplane HTTP/1.1 proxy port
+    # Allow DNS
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+---
+# ── 4. Control plane may reach dataplanes for health polling ──────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tsm-control-plane-to-dataplanes
+  namespace: tsm
+  labels:
+    app.kubernetes.io/part-of: tsm
+    tsm.io/policy-type: internal
+spec:
+  podSelector:
+    matchLabels:
+      tsm.io/role: control-plane
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              tsm.io/role: dataplane
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9000  # metrics
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+---
+# ── 5. Detector: accept inbound only from the TSM dataplane ──────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tsm-detector-ingress
+  namespace: tsm
+  labels:
+    app.kubernetes.io/part-of: tsm
+    tsm.io/policy-type: ingress-control
+spec:
+  podSelector:
+    matchLabels:
+      tsm.io/role: detector
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only the dataplane may POST /detect
+    - from:
+        - podSelector:
+            matchLabels:
+              tsm.io/role: dataplane
+      ports:
+        - protocol: TCP
+          port: 8000  # FastAPI detector
+        - protocol: TCP
+          port: 50051 # gRPC detector
+
+---
+# ── Kustomize resource list ───────────────────────────────────────────────────
+# (referenced by deploy/kubernetes/base/kustomization.yaml)

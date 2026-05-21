@@ -1,0 +1,55 @@
+[Unit]
+Description=TSM Control Plane — Policy Distribution & Cluster Health (Go)
+Documentation=https://github.com/tsm79/tsm79
+After=network-online.target postgresql.service
+Wants=network-online.target
+PartOf=tsm.target
+
+[Service]
+Type=simple
+User=tsm
+Group=tsm
+
+ExecStart=/usr/local/bin/tsm-control-plane
+
+EnvironmentFile=-/etc/tsm/control-plane.env
+
+# Core settings (non-secret)
+Environment=TSM_CP_PORT=9091
+Environment=TSM_CP_HEALTH_INTERVAL=10s
+Environment=TSM_CP_LOG_LEVEL=info
+Environment=TSM_QUEUE_GOLD_LIMIT=0
+Environment=TSM_QUEUE_SILVER_LIMIT=500
+Environment=TSM_QUEUE_BRONZE_LIMIT=50
+
+Restart=on-failure
+RestartSec=5s
+StartLimitIntervalSec=120s
+StartLimitBurst=5
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+SystemCallFilter=@system-service
+
+# Resource limits
+LimitNOFILE=32768
+MemoryMax=1G
+CPUWeight=50
+
+# Policy signing keypair lives in /var/lib/tsm/control-plane
+ReadWritePaths=/var/lib/tsm/control-plane
+
+TimeoutStopSec=20s
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target tsm.target
