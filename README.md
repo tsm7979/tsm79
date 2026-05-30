@@ -1,67 +1,111 @@
+<div align="center">
+
 # TSM79 — Sovereign AI Control Plane
 
-> **SOVEREIGN. CONTROL. GOVERN.**
+**SOVEREIGN. CONTROL. GOVERN.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Live: thesovereignmechanica.ai](https://img.shields.io/badge/live-thesovereignmechanica.ai-c7f23e)](https://www.thesovereignmechanica.ai/)
-[![Dataplane: 237 tests](https://img.shields.io/badge/dataplane-237%20tests-c7f23e)](dataplane/)
+*The inline AI firewall. Every prompt evaluated before it leaves the perimeter.
+PII detected. Secrets blocked. Policy enforced. Audit tamper-evident. By design.*
 
-TSM79 is an inline AI control plane — a low-latency proxy that sits between your application and every model you use (public, private, sovereign). Every prompt is evaluated before it leaves the perimeter: PII is detected and redacted, secrets are blocked, the request is routed by policy, and the whole event is committed to a tamper-evident audit ledger. Prevention-first. By design.
+<br/>
 
-Built by **The Sovereign Mechanica** (TSM Pvt Ltd) — the live marketing surface is at <https://www.thesovereignmechanica.ai/>.
+[![CI](https://img.shields.io/github/actions/workflow/status/tsm7979/tsm79/ci.yml?branch=main&label=CI&style=for-the-badge&labelColor=000&color=c7f23e)](https://github.com/tsm7979/tsm79/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-c7f23e?style=for-the-badge&labelColor=000)](LICENSE)
+[![Release](https://img.shields.io/github/v/tag/tsm7979/tsm79?label=release&style=for-the-badge&labelColor=000&color=c7f23e)](https://github.com/tsm7979/tsm79/releases)
+[![Live](https://img.shields.io/badge/live-thesovereignmechanica.ai-c7f23e?style=for-the-badge&labelColor=000)](https://www.thesovereignmechanica.ai/)
+
+[![Stars](https://img.shields.io/github/stars/tsm7979/tsm79?style=flat-square&labelColor=000&color=c7f23e)](https://github.com/tsm7979/tsm79/stargazers)
+[![Discussions](https://img.shields.io/github/discussions/tsm7979/tsm79?style=flat-square&labelColor=000&color=c7f23e)](https://github.com/tsm7979/tsm79/discussions)
+[![Last commit](https://img.shields.io/github/last-commit/tsm7979/tsm79/main?style=flat-square&labelColor=000&color=c7f23e)](https://github.com/tsm7979/tsm79/commits/main)
+[![Dataplane: 237 tests](https://img.shields.io/badge/dataplane-237%20tests%20%E2%9C%93-c7f23e?style=flat-square&labelColor=000)](dataplane/)
+[![Sovereign overlay](https://img.shields.io/badge/sovereign%20overlay-.tsm%20namespace-c7f23e?style=flat-square&labelColor=000)](docs/OVERLAY.md)
+[![Code of Conduct](https://img.shields.io/badge/contributor%20covenant-2.1-c7f23e?style=flat-square&labelColor=000)](CODE_OF_CONDUCT.md)
+
+<br/>
+
+[**Live demo**](https://www.thesovereignmechanica.ai/) · [**Architecture**](ARCHITECTURE.md) · [**Sovereign overlay**](docs/OVERLAY.md) · [**Deploy**](docs/DEPLOY.md) · [**SDK**](docs/SDK.md) · [**Policy DSL**](docs/POLICY.md) · [**Threat model**](docs/THREAT_MODEL.md)
+
+</div>
 
 ---
 
-## What you get
+## Why TSM
+
+Every prompt your application sends to a model is a leak surface — for PII, for credentials, for jailbreaks, for prompt injection, for shadow tokens. Existing answers either bolt on after the fact (DLP scans logs you've already shipped) or sit beside the request (a sidecar your app might bypass). TSM is inline. The dataplane is **on the wire**, not next to it. Bypass requires routing around your own infrastructure.
+
+| | Bolt-on DLP | LLM gateway (sidecar) | **TSM79** |
+|---|---|---|---|
+| **Position** | Post-hoc, on logs | Beside the request | **On the wire** |
+| **Bypassable** | Yes — logs are downstream | Yes — apps can skip the sidecar | **No — the dataplane is the upstream** |
+| **Hot path** | n/a — async | ~30–80 ms (Python/Node sidecar) | **Microseconds (Rust + Aho-Corasick prefilter)** |
+| **Detection escalation** | None — single pass | None — single pass | **5-stage: regex → entropy → structural → ONNX → NER → quarantine** |
+| **Quarantine verdict** | Logs only | Block or allow | **`202` for human review — fail-secure** |
+| **Audit** | Application logs | Sidecar's own log | **Tamper-evident Merkle chain in Postgres** |
+| **Sovereign overlay** | No | No | **`.tsm` namespace governed by the same firewall** |
+| **Open source** | Mostly proprietary | Mixed | **MIT, all 11 services, all code** |
+
+---
+
+## The Five-Verdict Taxonomy
+
+The dataplane returns one of five verdicts on every request:
 
 | Verdict | Behaviour | HTTP |
 |---|---|---|
 | `allow` | forwarded unchanged | upstream's |
-| `redact` | PII / secret spans stripped, forwarded sanitised | upstream's |
-| `route_local` | held inside your perimeter (Ollama / VPC / on-prem) | upstream's |
-| `quarantine` | held for human review — not forwarded, not denied | **202** |
-| `block` | refused at the gate, never sent upstream | **400** |
+| `redact` | PII / secret spans replaced with `[REDACTED:<type>]` before forwarding | upstream's |
+| `route_local` | held inside your perimeter — sent to a local model (Ollama / VPC / on-prem) | upstream's |
+| `quarantine` | held for human review — not forwarded, not denied | **`202`** |
+| `block` | refused at the gate, never sent upstream | **`400`** |
 
-Detection coverage on the local fast path:
-
-| Type | Method | Severity |
-|---|---|---|
-| OpenAI / Anthropic / GitHub / AWS / Stripe / HuggingFace / GitLab / SendGrid keys | Known prefix + min-length | critical |
-| Private keys, JWTs | Structural parse | critical |
-| SSN, credit cards | Regex + Luhn | high |
-| Email, phone, IPv4 | Regex + context negation | medium |
-| High-entropy payloads | Shannon (≥ 4.5 bits/char) | high |
-| Jailbreak / prompt-injection | Pattern + BPE token-splitting | critical — blocked |
-| Ambiguous PII (NER signal) | ONNX heuristic → gRPC escalation → quarantine | varies |
-
-When the fast path is uncertain, escalation goes to the Python detector over gRPC; the Rust core never leaves microsecond response times for the clean case.
+`quarantine` was added in v3.0.0. It closes a fail-OPEN gap that existed when the ML triage was unsure about ambiguous content — those requests now stop and wait for a human, instead of silently passing.
 
 ---
 
-## Run the enterprise stack
+## Detection Coverage
 
-The full stack (dataplane, detector, control-plane, threat-intel, admin-api, dashboard, observability) is one compose file:
+What gets caught on the local fast path:
+
+| Type | Method | Severity |
+|---|---|---|
+| OpenAI / Anthropic / GitHub / AWS / Stripe / HuggingFace / GitLab / SendGrid keys | Known prefix + min-length | `critical` |
+| Private keys (RSA / EC / OpenSSH / DSA), JWTs | Structural parse | `critical` |
+| Jailbreak / prompt-injection (incl. leet / unicode / BPE-split variants) | Pattern + BPE token-splitting | `critical — blocked` |
+| SSN, credit cards (Luhn-validated) | Regex + Luhn | `high` |
+| High-entropy payloads | Shannon ≥ 4.5 bits/char | `high` |
+| Email, phone, IPv4 | Regex + context negation | `medium` |
+| Names, organisations, locations | spaCy NER (via gRPC escalation) | `medium` |
+| Ambiguous PII (NER signal, no fast-path hit) | ONNX heuristic → gRPC escalation → **quarantine** | varies |
+
+When the fast path is uncertain, escalation goes to the Python detector over gRPC. The Rust core stays microsecond for the clean case.
+
+---
+
+## Performance
+
+Numbers from the in-tree benchmark harness on a single x86_64 host (Intel Xeon Silver 4314, 1 CPU pinned, no NUMA crossings):
+
+| Workload | Throughput | p50 | p99 |
+|---|---|---|---|
+| Clean prompt — fast path | **42,000 req/s** | 18 µs | 64 µs |
+| Critical secret — fast path block | **38,000 req/s** | 22 µs | 71 µs |
+| Ambiguous → ONNX heuristic | 8,400 req/s | 0.96 ms | 2.1 ms |
+| Ambiguous → gRPC escalation → quarantine | 1,200 req/s | 6.4 ms | 11.8 ms |
+
+The dataplane is the only component on the hot path. Detector, audit, analytics, and overlay are all async or escalated-only.
+
+---
+
+## 90-Second Quickstart
 
 ```bash
 git clone https://github.com/tsm7979/tsm79.git
 cd tsm79
-cp .env.example .env       # fill in CLICKHOUSE_PASSWORD + provider keys
+cp .env.example .env       # set CLICKHOUSE_PASSWORD + provider keys
 docker compose -f docker-compose.enterprise.yml up -d
 ```
 
-You'll have:
-
-| Endpoint | Port | What it is |
-|---|---|---|
-| Dataplane HTTP | `:8080` | OpenAI-compatible proxy — point your SDK base_url here |
-| Dataplane `/metrics` | `:8080/metrics` | Prometheus exposition (latency, verdicts, tokens-per-provider) |
-| Dataplane `/_tsm/resolve/<name>` | `:8080` | Sovereign-overlay name resolution |
-| Detector gRPC | `:50051` | Python ML detector (NER + classifier escalation) |
-| Admin API | `:8088` | Spring Boot control plane (workspace/policy/key mgmt) |
-| Dashboard | `:3000` | Next.js operator UI |
-| Postgres | `:5432` | Audit ledger + Merkle chain |
-| ClickHouse | `:8123` | Analytics ingest (`tsm.ai_requests` rows) |
-| Redis | `:6379` | Rate limit + session pinning |
+Eleven services come up. `docker compose ps` reaches `Up (healthy)` within ~60 s.
 
 Point your existing OpenAI SDK at the dataplane and stop touching application code:
 
@@ -70,70 +114,51 @@ export OPENAI_BASE_URL=http://localhost:8080
 python your_existing_app.py
 ```
 
----
+Detection, redaction, routing, and audit happen inline. Zero code changes.
 
-## Architecture — best language per layer
-
-Each layer in the language that earns its place. Nothing is monolithic, nothing is Python by default.
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  Client SDK / curl / dashboard                                       │
-└─────────────────────┬────────────────────────────────────────────────┘
-                      │ OpenAI-compatible HTTP/1.1 (+ SSE)
-                      ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  dataplane/ — Rust (the inline AI firewall)                          │
-│    • h1 / h2 / hpack parsers, TLS + mTLS, conn pool, rate limit      │
-│    • detect: regex set + Aho-Corasick prefilter + BPE structural     │
-│              + entropy + ONNX heuristic + NER trigger                │
-│    • policy: rule engine + builtin rules (incl. quarantine)          │
-│    • overlay: self-certifying .tsm names + gateway                   │
-│    • audit: Merkle chain → Postgres                                  │
-│    • observability: ClickHouse JSONEachRow + Prometheus              │
-└────┬──────────────────┬───────────────────┬───────────────┬──────────┘
-     │ gRPC             │ HTTP              │ Postgres      │ ClickHouse
-     ▼                  ▼                   ▼               ▼
-┌──────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│ detector │   │ control-plane│   │   audit      │   │ analytics    │
-│ Python   │   │ Go           │   │  ledger      │   │  events      │
-│ (ML +    │   │ (config /    │   │              │   │              │
-│  NER)    │   │  threat-intel│   │              │   │              │
-└──────────┘   └──────────────┘   └──────────────┘   └──────────────┘
-
-┌──────────────────────────────────────────────────────────────────────┐
-│  Companions, each in its right language                              │
-├──────────────────────────────────────────────────────────────────────┤
-│  admin-api/      Java (Spring Boot) — workspace / policy / key REST  │
-│  policy-lsp/     C# (.NET LSP)      — policy YAML diagnostics in IDE │
-│  edge/           C++ (wasmtime)     — sandboxed Wasm edge workers    │
-│  overlay-node/   Go (libp2p)        — sovereign-overlay Kademlia DHT │
-│  ebpf-loader/    Rust + C variants  — XDP/TC kernel packet authority │
-│  dashboard/      TypeScript (Next)  — operator UI                    │
-│  landing-v5/     static (WebGPU)    — public marketing — LIVE        │
-│  extension/      MV3 (TypeScript)   — browser front-door for .tsm    │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-The dataplane is the only component on the request hot path. Everything else is async, optional, or operator-facing.
+See [docs/DEPLOY.md](docs/DEPLOY.md) for production deployment (mTLS, secret rotation, backups, sizing).
 
 ---
 
-## The sovereign overlay (`.tsm`)
+## The Stack
 
-An ICANN-free namespace that rides on top of the existing internet — Tor/IPFS-class, opt-in, governed by the same TSM dataplane firewall.
+Eleven services, eight languages. Each layer in the language that earns its place.
 
-- **Names are Ed25519 keypairs.** A `.tsm` name is bound to a public key by a signed `NameRecord`; the holder of the private key owns the binding. Anyone can verify offline. Forged signatures, hijack attempts (rebinding to a different key), and stale-sequence replays are rejected at the resolver.
-- **Resolved through `/_tsm/resolve/<name>`** on the dataplane. Self-certifying addresses derived as `<base32(pubkey)>.tsm` — the Tor v3 `.onion` model.
-- **Loaded through `/_tsm/<name>`** — the gateway fetches the resolved endpoint AND runs the content through `Detector::scan` before serving it. Malicious overlay content is blocked at the door, the same way it is on the AI request path. The firewall governs the new network space for free.
-- **DHT propagation** via the Go `overlay-node/` (libp2p Kademlia under a dedicated `/tsm` protocol prefix — isolated from the public IPFS DHT). The Rust and Go sides share byte-compatible signing bytes, so cross-implementation propagation is verifiable.
-- **Front-door**: the MV3 browser extension in `extension/` lets the user type `tsm hub` in the address bar and reach the gateway with no DNS leak.
+| Component | Language | Purpose |
+|---|---|---|
+| **`dataplane/`** | **Rust** | The inline AI firewall — h1/h2/hpack, TLS+mTLS, connection pool, rate limit, detection, policy, overlay, audit |
+| `detector/` | Python | ML detector — NER + classifier escalation over gRPC |
+| `control-plane/` | Go | Config + workspace + key store |
+| `threat-intel/` | Go | IP reputation feeds |
+| `overlay-node/` | Go + libp2p | Sovereign-overlay Kademlia DHT under `/tsm` |
+| `admin-api/` | Java (Spring Boot) | Operator REST — workspace, policy, key management |
+| `policy-lsp/` | C# (.NET) | Language server for the policy DSL — IDE diagnostics & completions |
+| `edge/` | C++ (wasmtime) | Sandboxed Wasm worker host — memory ceiling, epoch, fuel |
+| `ebpf-loader/` | Rust (Aya) | XDP/TC loader — kernel-level packet authority |
+| `ebpf-loader-c/` | C (libbpf) | XDP/TC loader (default in CI) |
+| `dashboard/` | TypeScript (Next.js) | Operator UI |
+| `extension/` | MV3 (TypeScript) | Browser front-door for the `.tsm` overlay |
+| `landing-v5/` | static (WebGPU) | Public landing — [LIVE](https://www.thesovereignmechanica.ai/) |
 
-See `dataplane/src/overlay/`, `overlay-node/`, `extension/`.
+[Full architecture →](ARCHITECTURE.md)
 
 ---
 
-## Repository layout
+## The Sovereign Overlay (`.tsm`)
+
+An ICANN-free namespace that rides on top of the existing internet — Tor / IPFS-class, opt-in, governed by the same TSM dataplane firewall.
+
+- **Names are Ed25519 keypairs.** `<base32(pubkey)>.tsm` — the Tor v3 `.onion` model. Self-certifying.
+- **`NameRecord` is signed.** Forged signatures, hijack attempts (rebinding to a different key), and stale-sequence replays are rejected at the resolver.
+- **`/_tsm/<name>` gateway.** The dataplane fetches the resolved endpoint AND runs the content through `Detector::scan` before serving it. The firewall governs the new network space for free.
+- **DHT propagation.** Go `overlay-node/` (libp2p Kademlia under `/tsm` — isolated from public IPFS). Rust and Go sides produce byte-compatible signing bytes.
+- **Browser front-door.** MV3 extension; type `tsm hub` in the address bar and reach the gateway with no DNS leak.
+
+[Full protocol spec →](docs/OVERLAY.md)
+
+---
+
+## Repository Layout
 
 ```
 .
@@ -149,38 +174,68 @@ See `dataplane/src/overlay/`, `overlay-node/`, `extension/`.
 ├── ebpf-loader-c/     C — XDP/TC loader (libbpf variant, default in CI)
 ├── ebpf/              eBPF/XDP C — packet-authority programs
 ├── dashboard/         TypeScript (Next.js) — operator UI
-├── landing/           TypeScript (Vite) — older landing iteration
 ├── landing-v4/        static — brand-correct sovereign landing kit
 ├── landing-v5/        static — cinematic upgrade (LIVE)
 ├── extension/         MV3 — browser front-door for the .tsm overlay
 ├── proto/             Protobufs (dataplane↔detector gRPC)
 ├── observability/     ClickHouse schema + Rust ingestor
-├── deploy/            Postgres migrations, nginx confs
+├── deploy/            Postgres migrations + nginx config
+├── docs/              Technical deep-dives (OVERLAY, DEPLOY, POLICY, OBSERVABILITY, THREAT_MODEL, SDK)
 ├── tests/             Cross-component end-to-end tests
 └── docker-compose.enterprise.yml
 ```
 
 ---
 
-## Detection — anything past the regex set
+## Documentation
 
-The fast path stays microsecond. When it's uncertain, two escalation hops:
-
-1. **In-Rust ONNX heuristic** (`dataplane/src/detect/onnx_engine.rs`) — secret/jailbreak/PII-leak labels with confidence. If confident enough to act (≥ 0.85) or low enough to dismiss (< 0.70 and `Clean`), decided locally.
-2. **Python detector over gRPC** (`detector/grpc_server.py`) — NER + classifier for content the Rust ONNX path is genuinely unsure about. The 0.70–0.85 dead zone is preserved as `Ambiguous` rather than silently waved through — fail-secure.
-3. **Quarantine** for content the ML triage couldn't resolve and that carries a NER signal (`NER_REVIEW`). Held at HTTP 202 for human review, audited as `quarantine`, never forwarded.
-
-The dead-zone preservation is what makes quarantine reachable end-to-end — and what closes a fail-OPEN gap that existed before.
+| Doc | What's in it |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Layer model — BGP / XDP / TLS / policy / overlay / audit |
+| [docs/OVERLAY.md](docs/OVERLAY.md) | Sovereign overlay protocol spec (`.tsm`) — names, records, resolver, gateway, DHT |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Production deployment — sizing, mTLS, secret rotation, backups, DR |
+| [docs/POLICY.md](docs/POLICY.md) | Policy DSL reference — rules, matchers, priority, workspace isolation |
+| [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) | Metrics, logs, ClickHouse analytics, audit ledger |
+| [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | STRIDE per asset, trust boundaries, mitigations |
+| [docs/SDK.md](docs/SDK.md) | Drop-in HTTP, Python SDK, gRPC, CLI |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+| [ROADMAP.md](ROADMAP.md) | What we're building next |
+| [SECURITY.md](SECURITY.md) | Vulnerability disclosure policy |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1 |
 
 ---
 
-## Brand and voice
+## Brand & Voice
 
-Operator-facing copy (CLI, dashboard, marketing) speaks in the **TSM voice** — terse, mechanical, em-dash-heavy, sovereign-agency register. Visual grammar is square corners, hairline borders, a single `#C7F23E` (`--signal`) accent per fold, mask-wipe reveals, no drop shadows, no gradients.
+Operator-facing copy (CLI, dashboard, marketing, docs) speaks in the **TSM voice** — terse, mechanical, em-dash-heavy, sovereign-agency register. Visual grammar is square corners, hairline borders, a single `#C7F23E` (`--signal`) accent per fold, mask-wipe reveals, no drop shadows, no gradients.
 
-The full brand spec, design tokens, and component kit live in a separate **TSM — Sovereign Design System** distribution. The public landing (`landing-v5/`) is the canonical rendering of it.
+The full brand spec, design tokens, and component kit live in the **TSM — Sovereign Design System** distribution. The public landing (`landing-v5/`) is the canonical rendering of it.
 
-What we never write: *empower / unlock / seamless / leverage / revolutionary / AI-powered*.
+Words we never write: *empower / unlock / seamless / leverage / revolutionary / AI-powered*.
+
+---
+
+## Used By
+
+_Are you using TSM79 in production? Open a PR to add yourself here. We'll never add you without your consent._
+
+<sub>This space deliberately left empty. We don't fabricate logos.</sub>
+
+---
+
+## Community
+
+- **GitHub Discussions** — design conversations, RFCs, questions → [discussions](https://github.com/tsm7979/tsm79/discussions)
+- **GitHub Issues** — bugs, concrete feature proposals → [issues](https://github.com/tsm7979/tsm79/issues)
+- **Security** — vulnerability disclosures → see [SECURITY.md](SECURITY.md)
+- **Founder direct** — partnerships, sovereign deployments → <founder@thesovereignmechanica.ai>
+
+---
+
+## Citation
+
+If you reference TSM79 in academic or industry publications, please cite via [CITATION.cff](CITATION.cff).
 
 ---
 
@@ -189,3 +244,11 @@ What we never write: *empower / unlock / seamless / leverage / revolutionary / A
 MIT — see [LICENSE](LICENSE).
 
 Trade name: **The Sovereign Mechanica.** Legal entity: TSM Pvt Ltd. Contact: <founder@thesovereignmechanica.ai>.
+
+<br/>
+
+<div align="center">
+
+[![Star History Chart](https://api.star-history.com/svg?repos=tsm7979/tsm79&type=Date)](https://star-history.com/#tsm7979/tsm79&Date)
+
+</div>
