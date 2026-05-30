@@ -109,3 +109,9 @@ landing/blender/*.glb
 *.bak
 *.orig
 *.tmp
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
