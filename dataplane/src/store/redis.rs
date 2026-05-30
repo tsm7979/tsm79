@@ -191,7 +191,7 @@ impl TcpConn {
                 let len: i64 = line[1..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
                 if len < 0 { return Ok(String::new()); } // nil
                 let mut bulk = vec![0u8; len as usize + 2]; // +2 for \r\n
-                self.reader.get_mut().read_exact(&mut bulk)
+                std::io::Read::read_exact(self.reader.get_mut(), &mut bulk)
                     .map_err(|e| e.to_string())?;
                 Ok(String::from_utf8_lossy(&bulk[..len as usize]).into_owned())
             }

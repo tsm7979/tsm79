@@ -54,6 +54,22 @@ pub fn render() -> Vec<u8> {
         }
     }
 
+    // ── Token usage / cost tracking (exact, from upstream `usage`) ──────────────
+    writeln_buf!("# HELP tsm_tokens_prompt_total Prompt (input) tokens by provider");
+    writeln_buf!("# TYPE tsm_tokens_prompt_total counter");
+    for (provider, count) in m.tokens_prompt.iter() {
+        if count > 0 {
+            writeln_buf!("tsm_tokens_prompt_total{{provider=\"{}\"}} {}", provider, count);
+        }
+    }
+    writeln_buf!("# HELP tsm_tokens_completion_total Completion (output) tokens by provider");
+    writeln_buf!("# TYPE tsm_tokens_completion_total counter");
+    for (provider, count) in m.tokens_completion.iter() {
+        if count > 0 {
+            writeln_buf!("tsm_tokens_completion_total{{provider=\"{}\"}} {}", provider, count);
+        }
+    }
+
     // ── Histograms ────────────────────────────────────────────────────────────
     writeln_buf!("# HELP tsm_request_duration_ms Request end-to-end latency in milliseconds");
     writeln_buf!("# TYPE tsm_request_duration_ms histogram");
@@ -100,7 +116,7 @@ pub fn render_json(store: &MetricsStore) -> Vec<u8> {
     // Top PII types
     let mut top_pii: Vec<serde_json::Value> = store.pii_types
         .iter()
-        .filter(|(_, c)| c > 0)
+        .filter(|(_, c)| *c > 0)
         .map(|(t, c)| serde_json::json!({ "type": t, "count": c }))
         .collect();
     top_pii.sort_by(|a, b| {

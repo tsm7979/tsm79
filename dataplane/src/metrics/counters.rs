@@ -53,6 +53,13 @@ impl CounterVec {
         }
     }
 
+    /// Add `n` to the cell for `label_value` (no-op if the label is unknown).
+    pub fn inc_by(&self, label_value: &str, n: u64) {
+        if let Some((_, c)) = self.cells.iter().find(|(v, _)| *v == label_value) {
+            c.fetch_add(n, Ordering::Relaxed);
+        }
+    }
+
     pub fn get(&self, label_value: &str) -> u64 {
         self.cells
             .iter()

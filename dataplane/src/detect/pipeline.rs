@@ -22,8 +22,6 @@
 /// The pipeline is intentionally synchronous within the Rust dataplane.
 /// The detector service call (stage 5) is handled by an HTTP round-trip.
 
-use std::sync::Arc;
-
 // ── Span ─────────────────────────────────────────────────────────────────────
 
 /// A character-offset span within the scanned text.

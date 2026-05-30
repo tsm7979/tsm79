@@ -309,7 +309,7 @@ impl OnnxEngine {
     /// Confidence is capped at 0.80 to signal "not model-confirmed".
     fn heuristic_classify(&self, text: &str, t0: Instant) -> OnnxVerdict {
         use crate::detect::bpe::{bpe_scan, BpeThreat};
-        use crate::detect::entropy::entropy_verdict;
+        use crate::detect::entropy::shannon_entropy;
 
         let bpe = bpe_scan(text);
         if bpe.threat != BpeThreat::None {
@@ -324,7 +324,7 @@ impl OnnxEngine {
 
         // Check for high-entropy secrets
         let has_high_entropy = text.split_whitespace().any(|tok| {
-            tok.len() >= 20 && entropy_verdict(tok) > 4.5
+            tok.len() >= 20 && shannon_entropy(tok.as_bytes()) > 4.5
         });
 
         if has_high_entropy {

@@ -19,40 +19,7 @@ use libc::{
 
 // ── Interest flags ────────────────────────────────────────────────────────────
 
-bitflags! {
-    pub struct Interest: u32 {
-        const READABLE  = EPOLLIN  as u32;
-        const WRITABLE  = EPOLLOUT as u32;
-        const EDGE      = EPOLLET  as u32;
-        const ERROR     = EPOLLERR as u32;
-        const HANGUP    = EPOLLHUP as u32;
-        const READ_CLOSE = EPOLLRDHUP as u32;
-    }
-}
-
-/// Implement a minimal bitflags! macro inline to avoid the crate dependency.
-#[macro_export]
-macro_rules! bitflags {
-    (pub struct $name:ident: $ty:ty { $(const $flag:ident = $val:expr;)* }) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub $ty);
-        impl $name {
-            $( pub const $flag: $name = $name($val); )*
-            pub fn contains(self, other: $name) -> bool { (self.0 & other.0) == other.0 }
-            pub fn bits(self) -> $ty { self.0 }
-        }
-        impl std::ops::BitOr for $name {
-            type Output = Self;
-            fn bitor(self, rhs: Self) -> Self { $name(self.0 | rhs.0) }
-        }
-        impl std::ops::BitAnd for $name {
-            type Output = Self;
-            fn bitand(self, rhs: Self) -> Self { $name(self.0 & rhs.0) }
-        }
-    }
-}
-
-// Re-define Interest using the inline macro since we can't use the bitflags crate.
+// `Interest` is a hand-written bitflag set (no external `bitflags` crate dep).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Interest(pub u32);
 impl Interest {

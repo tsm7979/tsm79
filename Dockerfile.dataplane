@@ -25,6 +25,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
         musl-tools \
         ca-certificates \
         file \
+        protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup target add x86_64-unknown-linux-musl
@@ -47,14 +48,23 @@ WORKDIR /build
 # Copy full source
 COPY dataplane/ ./dataplane/
 
+# main.rs includes the ClickHouse ingestor via #[path = "../../observability/clickhouse/ingestor.rs"],
+# so the observability tree must sit alongside dataplane/ in the build context.
+COPY observability/ ./observability/
+
+# proto/ is read by build.rs (tonic-build) when compiling with --features grpc.
+COPY proto/ ./proto/
+
 WORKDIR /build/dataplane
 
-# Force rebuild of our crate (dep cache is still valid)
+# Force rebuild of our crate with the typed gRPC detector client (dep cache still valid).
 RUN touch src/main.rs && \
-    cargo build --release --target x86_64-unknown-linux-musl
+    cargo build --release --target x86_64-unknown-linux-musl --features grpc
 
-# Verify the binary is statically linked (no glibc deps)
-RUN file target/x86_64-unknown-linux-musl/release/tsm-dataplane | grep -q "statically linked" && \
+# Verify the binary has no glibc deps. Modern Rust musl builds emit a static-PIE
+# binary, which `file` reports as "static-pie linked" (not "statically linked");
+# both forms are fully static, so accept either.
+RUN file target/x86_64-unknown-linux-musl/release/tsm-dataplane | grep -qE "statically linked|static-pie linked" && \
     ls -lh target/x86_64-unknown-linux-musl/release/tsm-dataplane
 
 # Create the audit log directory here in the builder (distroless has no shell/mkdir).

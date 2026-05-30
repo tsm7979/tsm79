@@ -49,7 +49,7 @@ use std::{
 
 use rcgen::{
     BasicConstraints, Certificate, CertificateParams, DistinguishedName,
-    DnType, ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,
+    DnType, ExtendedKeyUsagePurpose, Ia5String, IsCa, KeyPair, KeyUsagePurpose,
     SanType,
 };
 
@@ -263,7 +263,7 @@ fn generate_leaf(
     params.distinguished_name = dn;
 
     // SAN is mandatory for modern TLS clients
-    params.subject_alt_names = vec![SanType::DnsName(hostname.to_owned())];
+    params.subject_alt_names = vec![SanType::DnsName(Ia5String::try_from(hostname)?)];
 
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
     params.key_usages          = vec![KeyUsagePurpose::DigitalSignature];
@@ -292,8 +292,15 @@ mod tests {
     use super::*;
     use std::env;
 
+    /// Serializes HOME/USERPROFILE mutation: `env::set_var` is process-global and
+    /// cargo runs tests in parallel threads, so concurrent `with_temp_home` calls
+    /// would clobber each other's HOME (intermittent "HomeDir" failures).
+    static HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// Run `f` with HOME set to a fresh temp directory, then restore.
     fn with_temp_home<F: FnOnce()>(f: F) {
+        // Hold the lock across the whole closure so no other test mutates HOME mid-run.
+        let _guard = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::TempDir::new().unwrap();
         // Override both HOME (Unix) and USERPROFILE (Windows) so tsm_dir() works
         env::set_var("HOME",        dir.path());

@@ -467,11 +467,11 @@ mod tests {
         // Entry size = 4 + 5 + 32 = 41 bytes
         t.add(b"name".to_vec(), b"value".to_vec());
         assert_eq!(t.size, 41);
-        // Second entry same size → total 82
-        t.add(b"nam2".to_vec(), b"val2".to_vec());
+        // Second entry same size (4+5+32=41) → total 82
+        t.add(b"nam2".to_vec(), b"valu2".to_vec());
         assert_eq!(t.size, 82);
-        // Third entry would make 123 > 100 → evict one
-        t.add(b"nam3".to_vec(), b"val3".to_vec());
+        // Third entry (41) would make 123 > 100 → evict one
+        t.add(b"nam3".to_vec(), b"valu3".to_vec());
         assert!(t.size <= 100);
     }
 }

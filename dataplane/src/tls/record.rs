@@ -17,6 +17,7 @@ use super::keys::{TrafficKeys, CipherSuite};
 // ── Content types ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(u8)]
 pub enum ContentType {
     ChangeCipherSpec = 20,
     Alert            = 21,

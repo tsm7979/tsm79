@@ -35,6 +35,8 @@ pub struct MetricsStore {
     pub fastpath_hits:      CounterVec,   // label: pii_type
     pub circuit_open:       CounterVec,   // label: upstream
     pub pii_types:          CounterVec,   // label: pii_type
+    pub tokens_prompt:      CounterVec,   // label: provider — exact input tokens (from upstream usage)
+    pub tokens_completion:  CounterVec,   // label: provider — exact output tokens (from upstream usage)
 
     // Counters — scalar
     pub detector_calls:     Counter,
@@ -69,6 +71,7 @@ impl MetricsStore {
             "JWT", "HIGH_ENTROPY", "JAILBREAK",
         ];
         const UPSTREAMS: &[&str] = &["openai", "anthropic", "ollama", "local"];
+        const PROVIDERS: &[&str] = &["openai", "anthropic", "ollama", "local", "unknown"];
         const ACTIONS:   &[&str] = &["allow", "block", "redact", "route_local"];
 
         MetricsStore {
@@ -83,6 +86,12 @@ impl MetricsStore {
             ),
             pii_types: CounterVec::new(
                 "tsm_pii_types_detected_total", "PII types detected", "pii_type", PII_TYPES,
+            ),
+            tokens_prompt: CounterVec::new(
+                "tsm_tokens_prompt_total", "Prompt (input) tokens by provider", "provider", PROVIDERS,
+            ),
+            tokens_completion: CounterVec::new(
+                "tsm_tokens_completion_total", "Completion (output) tokens by provider", "provider", PROVIDERS,
             ),
 
             detector_calls:   Counter::new("tsm_detector_calls_total",   "Calls to the Python detector"),
@@ -167,6 +176,16 @@ impl MetricsStore {
         self.pool_connections.inc();
     }
 
+    /// Record exact token usage (from the upstream `usage` field) by provider.
+    /// Powers cross-provider cost tracking. `provider` is normalised to a known
+    /// label (falls back to "unknown") so no usage is silently dropped.
+    pub fn record_usage(&self, provider: &str, prompt_tokens: u64, completion_tokens: u64) {
+        let known = ["openai", "anthropic", "ollama", "local"];
+        let label = if known.contains(&provider) { provider } else { "unknown" };
+        self.tokens_prompt.inc_by(label, prompt_tokens);
+        self.tokens_completion.inc_by(label, completion_tokens);
+    }
+
     // ── Query helpers ─────────────────────────────────────────────────────────
 
     /// Exponential moving average of risk scores (0.0 if no requests yet).
@@ -217,10 +236,6 @@ static METRICS_CELL: OnceLock<MetricsStore> = OnceLock::new();
 pub fn metrics() -> &'static MetricsStore {
     METRICS_CELL.get_or_init(MetricsStore::new)
 }
-
-/// Convenience alias used by `prometheus.rs` (`use super::METRICS`).
-/// This is a function, not a static, but it matches the usage pattern.
-pub use metrics as METRICS_FN;
 
 // The prometheus module accesses metrics via `METRICS` which is declared as:
 //   use super::{METRICS, MetricsStore};

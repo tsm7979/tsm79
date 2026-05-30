@@ -17,7 +17,6 @@
 ///   At 10k req/s this keeps the DB write load at ~160 TPS (10k / 64).
 
 use std::sync::mpsc::{sync_channel, SyncSender};
-use std::sync::Arc;
 use std::time::Duration;
 
 // ── Wire protocol to PostgreSQL via libpq-compatible TCP ─────────────────────
@@ -108,6 +107,7 @@ impl AuditSink {
 /// Returns `None` if TSM_PG_DSN is not set (JSONL-only mode).
 pub fn start(kafka_brokers: Option<String>) -> Option<AuditSink> {
     let dsn = std::env::var("TSM_PG_DSN").ok()?;
+    let kafka_enabled = kafka_brokers.is_some();
 
     let (tx, rx) = sync_channel::<AuditEvent>(4096);
     let sink = AuditSink { tx };
@@ -168,7 +168,7 @@ pub fn start(kafka_brokers: Option<String>) -> Option<AuditSink> {
         .ok()?;
 
     crate::telemetry::emit("info", "audit_pg", "PostgreSQL audit sink started", &[
-        ("kafka_enabled", kafka_brokers.is_some().to_string()),
+        ("kafka_enabled", kafka_enabled.to_string()),
     ]);
 
     Some(sink)
@@ -248,13 +248,13 @@ impl PgWriter {
         let mut reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
         loop {
             let mut type_byte = [0u8; 1];
-            if reader.read_exact(&mut type_byte).is_err() { break; }
+            if std::io::Read::read_exact(&mut reader, &mut type_byte).is_err() { break; }
             let mut len_buf = [0u8; 4];
-            reader.read_exact(&mut len_buf).map_err(|e| e.to_string())?;
+            std::io::Read::read_exact(&mut reader, &mut len_buf).map_err(|e| e.to_string())?;
             let len = i32::from_be_bytes(len_buf) as usize;
             if len < 4 { break; }
             let mut payload = vec![0u8; len - 4];
-            reader.read_exact(&mut payload).map_err(|e| e.to_string())?;
+            std::io::Read::read_exact(&mut reader, &mut payload).map_err(|e| e.to_string())?;
 
             match type_byte[0] {
                 b'E' => {
@@ -297,12 +297,12 @@ fn send_query(stream: &mut TcpStream, sql: &str) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
     loop {
         let mut type_byte = [0u8; 1];
-        if reader.read_exact(&mut type_byte).is_err() { break; }
+        if std::io::Read::read_exact(&mut reader, &mut type_byte).is_err() { break; }
         let mut len_buf = [0u8; 4];
-        if reader.read_exact(&mut len_buf).is_err() { break; }
+        if std::io::Read::read_exact(&mut reader, &mut len_buf).is_err() { break; }
         let len = i32::from_be_bytes(len_buf) as usize;
         let mut payload = vec![0u8; len.saturating_sub(4)];
-        reader.read_exact(&mut payload).ok();
+        std::io::Read::read_exact(&mut reader, &mut payload).ok();
         match type_byte[0] {
             b'Z' => break, // ReadyForQuery
             b'E' => {
@@ -452,9 +452,13 @@ impl KafkaProducer {
             self.stream = Some(self.connect()?);
         }
 
-        if let Err(e) = self.send_produce(self.stream.as_mut().unwrap(), &key, &payload) {
-            self.stream = None; // force reconnect
-            return Err(format!("kafka produce: {e}"));
+        // Take the stream out so `self` isn't borrowed both mutably (the stream)
+        // and immutably (the &self method) at once. Restore on success; on error
+        // leave it None to force a reconnect next call.
+        let mut stream = self.stream.take().unwrap();
+        match self.send_produce(&mut stream, &key, &payload) {
+            Ok(()) => { self.stream = Some(stream); }
+            Err(e) => return Err(format!("kafka produce: {e}")),
         }
         Ok(())
     }

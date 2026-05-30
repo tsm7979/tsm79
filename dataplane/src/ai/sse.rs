@@ -230,19 +230,20 @@ impl SseRedactBuffer {
 
     /// Called when `[DONE]` is received: scan and optionally redact the buffered
     /// tail, then return all remaining pending events for final forwarding.
-    pub fn flush_done(self) -> Vec<SseEvent> {
+    pub fn flush_done(&mut self) -> Vec<SseEvent> {
         if self.pending.is_empty() {
             return vec![];
         }
+        let pending = std::mem::take(&mut self.pending);
         let tail = &self.text[self.forwarded_text_end..];
         if tail.is_empty() {
-            return self.pending.into_iter().map(|(ev, _, _)| ev).collect();
+            return pending.into_iter().map(|(ev, _, _)| ev).collect();
         }
         // Scan the buffered tail for PII
         let detector = crate::detect::Detector::new();
         match detector.scan(tail) {
             crate::detect::DetectVerdict::Redact { redacted, .. } => {
-                rebuild_events_redacted(self.pending, tail, &redacted)
+                rebuild_events_redacted(pending, tail, &redacted)
             }
             crate::detect::DetectVerdict::Block { .. } => {
                 // Tail contained block-level PII: replace with a single marker event
@@ -255,7 +256,7 @@ impl SseRedactBuffer {
             }
             _ => {
                 // Clean: forward all buffered events unchanged
-                self.pending.into_iter().map(|(ev, _, _)| ev).collect()
+                pending.into_iter().map(|(ev, _, _)| ev).collect()
             }
         }
     }

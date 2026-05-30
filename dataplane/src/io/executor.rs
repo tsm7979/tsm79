@@ -177,7 +177,10 @@ impl Executor {
             }
         }
 
-        result.borrow_mut().take().expect("future completed but produced no value")
+        // Bind to a local so the `RefMut` temporary is dropped here, before
+        // `result` itself — a tail-expression borrow would outlive `result`.
+        let out = result.borrow_mut().take();
+        out.expect("future completed but produced no value")
     }
 
     /// Total number of allocated task slots (including free slots).

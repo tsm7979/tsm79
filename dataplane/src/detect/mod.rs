@@ -7,9 +7,8 @@ pub mod bpe;
 pub mod pipeline;
 pub mod onnx_engine;
 
-pub use redact::{RedactSpan, redact, span_from_match};
+pub use redact::{RedactSpan, redact};
 pub use cvss::{Severity, composite_score, RiskInputs};
-pub use pipeline::{Pipeline, PipelineResult, DetectionStage, Verdict, Span as DetectSpan, StageContext};
 
 use patterns::{pattern_set, pattern_regexes, prefilter_matches, PATTERN_META, has_negation_context};
 use entropy::entropy_verdict;
@@ -56,6 +55,11 @@ pub enum DetectVerdict {
     RouteLocal {
         pii_types:  Vec<String>,
         risk_score: f64,
+        /// Byte-offset spans of the detected PII. Carried so the policy layer can
+        /// REDACT (not merely route) when it upgrades the action — otherwise a
+        /// policy `Redact` decision on a `RouteLocal` verdict would have no spans
+        /// to strip and would forward the original text in the clear.
+        spans:      Vec<RedactSpan>,
     },
 
     /// Cannot decide locally; Python detector must be consulted.
@@ -157,8 +161,14 @@ impl Detector {
             // Check each individual match for negation context; for CREDIT_CARD
             // also apply Luhn validation to reduce false positives.
             let mut confirmed_spans: Vec<RedactSpan> = Vec::new();
+            // Negation context ("example", "test", "sample", …) waves through ONLY
+            // lower-severity matches — documentation samples of emails/phones.
+            // Critical/high-severity PII (SSN, credit card, secrets, jailbreak) is
+            // NEVER skipped on a nearby negation word: a real SSN sitting next to an
+            // "@example.com" address must still be caught (fail secure).
+            let negatable = severity != "critical" && severity != "high";
             for m in regexes[*ix].find_iter(text) {
-                if has_negation_context(text, m.start(), 60) {
+                if negatable && has_negation_context(text, m.start(), 60) {
                     continue;
                 }
                 if type_name == "CREDIT_CARD" {
@@ -178,8 +188,8 @@ impl Detector {
                 pii_types.push(type_name.to_owned());
             }
 
-            if *cvss > max_cvss {
-                max_cvss     = *cvss;
+            if cvss > max_cvss {
+                max_cvss     = cvss;
                 max_severity = severity.to_owned();
             }
 
@@ -254,8 +264,10 @@ impl Detector {
             };
         }
 
-        // Redactable range: confirmed PII but not block-level
-        if risk_score >= RISK_REDACT_LOW && !redact_spans.is_empty() {
+        // Redactable range: confirmed PII at/above the redact threshold, OR any
+        // confirmed CRITICAL-severity PII (SSN, credit card) regardless of the
+        // composite score — critical PII is never merely routed in the clear.
+        if (risk_score >= RISK_REDACT_LOW || max_severity == "critical") && !redact_spans.is_empty() {
             let redacted_text = redact(text, &redact_spans);
             return DetectVerdict::Redact {
                 pii_types,
@@ -266,7 +278,7 @@ impl Detector {
 
         // Route-local: PII found but risk is in the medium range
         if risk_score >= RISK_AMBIGUOUS && !pii_types.is_empty() && !ner_triggered {
-            return DetectVerdict::RouteLocal { pii_types, risk_score };
+            return DetectVerdict::RouteLocal { pii_types, risk_score, spans: redact_spans };
         }
 
         // Ambiguous: NER keywords without definitive pattern match

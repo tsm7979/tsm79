@@ -12,7 +12,12 @@ path = "src/main.rs"
 default = []
 # Enable typed gRPC transport to Python ML detector (replaces raw HTTP).
 # Requires protoc + tonic-build.  Build with: cargo build --features grpc
-grpc = ["tonic", "prost", "tokio"]
+grpc = ["dep:tonic", "dep:prost", "dep:tokio", "dep:tonic-build"]
+# Optional: link the native ONNX Runtime (libonnxruntime) for in-Rust ML triage.
+# Off by default — the heuristic path + the Python gRPC detector cover ML triage.
+# Enabling it requires adding `ort` + `ndarray` deps; declared here so that
+# cfg(feature = "ort-linked") is a known cfg (silences the unexpected_cfgs lint).
+ort-linked = []
 
 [dependencies]
 # Raw syscall access for io_uring, epoll, BPF map interaction
@@ -39,7 +44,8 @@ aho-corasick = "1"
 # Pure-Rust X.509 certificate generation for the local Root CA / TLS MITM.
 # Uses ring for the underlying crypto (Ed25519 / ECDSA P-256 signing).
 # Required by dataplane/src/tls/ca.rs.
-rcgen = "0.13"
+# x509-parser feature gates CertificateParams::from_ca_cert_pem (load existing CA from disk).
+rcgen = { version = "0.13", features = ["x509-parser"] }
 
 # HMAC-SHA256 for the audit chain — constant-time safe
 hmac = "0.12"

@@ -119,7 +119,7 @@ pub fn parse_request(buf: &[u8]) -> ParseResult<'_> {
     let mut cursor  = line_end + 2; // skip \r\n after request line
     loop {
         if cursor >= header_section.len() { break; }
-        match parse_header_line(&header_section[cursor..]) {
+        match parse_header_line(&buf[cursor..]) {
             Some((name, value, consumed)) => {
                 headers.push(H1Header { name, value });
                 cursor += consumed + 2; // +2 for \r\n
@@ -186,7 +186,7 @@ pub fn parse_response(buf: &[u8]) -> ResponseParseResult<'_> {
     let mut cursor = line_end + 2;
     loop {
         if cursor >= header_section.len() { break; }
-        match parse_header_line(&header_section[cursor..]) {
+        match parse_header_line(&buf[cursor..]) {
             Some((name, value, consumed)) => {
                 headers.push(H1Header { name, value });
                 cursor += consumed + 2;

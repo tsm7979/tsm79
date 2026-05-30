@@ -17,7 +17,6 @@
 ///   2. Compact epoch roots for external pinning (e.g., publishing to a public ledger).
 ///   3. Batch verification: verify the entire chain without replaying every event.
 
-use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -369,10 +368,10 @@ mod tests {
 
     #[test]
     fn sha256_known_vector() {
-        // SHA-256("abc") = ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469fa72a67b86643c2d
+        // SHA-256("abc") — canonical FIPS 180-2 test vector.
         let hash = sha256(b"abc");
         let hex:  String = hash.iter().map(|b| format!("{:02x}", b)).collect();
-        assert_eq!(hex, "ba7816bf8f01cfea414140de5dae2ec73b00361bbef0469fa72a67b86643c2d0");
+        assert_eq!(hex, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     }
 
     #[test]

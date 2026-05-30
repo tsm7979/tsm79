@@ -157,7 +157,7 @@ impl ServerHandshake {
                 // Log the threat match — the pipeline layer decides whether to abort
                 // the connection (it calls ja3_threat() after process()).
                 crate::log_warn!("tls", "malicious TLS fingerprint detected";
-                    "ja3"    => fp.ja3_hash(),
+                    "ja3"    => fp.ja3_hash,
                     "threat" => fp.lookup_threat().map(|t| t.tool).unwrap_or("unknown"),
                     "score"  => fp.risk_score()
                 );

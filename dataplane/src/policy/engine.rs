@@ -146,6 +146,7 @@ impl PolicyEngine {
                 "block"       => Action::Block { reason: w.name.clone() },
                 "redact"      => Action::Redact,
                 "route_local" => Action::RouteLocal,
+                "quarantine"  => Action::Quarantine { reason: w.name.clone() },
                 _             => Action::Allow,
             };
             // Parse condition: support {"risk_score_gte": N} and {"always": true}

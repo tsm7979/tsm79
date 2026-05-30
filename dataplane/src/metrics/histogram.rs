@@ -82,9 +82,9 @@ mod tests {
         let buckets = h.buckets();
         let b5 = buckets.iter().find(|(b, _)| *b == 5.0).unwrap();
         assert_eq!(b5.1, 1);
-        // 600ms falls in <=1000ms bucket
+        // cumulative bucket le=1000ms includes ALL three observations
         let b1000 = buckets.iter().find(|(b, _)| *b == 1000.0).unwrap();
-        assert_eq!(b1000.1, 2); // cumulative: 3ms + 600ms both <= 1000ms
+        assert_eq!(b1000.1, 3); // cumulative: 3ms + 15ms + 600ms all <= 1000ms
     }
 
     #[test]

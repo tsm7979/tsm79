@@ -31,7 +31,7 @@ use serde_json;
 use crate::ai::AiRequest;
 use crate::audit::{AuditLog, AuditSink, AuditEvent};
 use crate::config::Config;
-use crate::detect::{Detector, DetectVerdict, RedactSpan};
+use crate::detect::{Detector, DetectVerdict, RedactSpan, redact};
 use crate::http::{parse_request, ParseResult, build_response};
 use crate::http::h1::find_double_crlf;
 use crate::metrics::{metrics, RecentRequest};
@@ -275,6 +275,75 @@ pub fn handle_connection(
         return req.keep_alive();
     }
 
+    // ── Sovereign overlay: name resolution gateway ───────────────────────────
+    // `/_tsm/resolve/<name>` resolves an ICANN-free `.tsm` name to its SIGNED,
+    // self-certifying record — no registrar, no DNS. Because this flows through
+    // the data plane, the overlay is governed by the same detect→policy pipeline.
+    if let Some(name) = path.strip_prefix("/_tsm/resolve/") {
+        let (status, reason, body) = match crate::overlay::resolver().resolve(name) {
+            Some(rec) => (200, "OK", format!(
+                r#"{{"resolved":true,"name":{:?},"pubkey":{:?},"endpoint":{:?},"sequence":{},"self_certifying":{},"verified":{}}}"#,
+                rec.name, rec.pubkey_hex(), rec.endpoint, rec.sequence,
+                rec.is_self_certifying(), rec.verify()
+            )),
+            None => (404, "Not Found", format!(
+                r#"{{"resolved":false,"name":{:?},"error":"name not registered in the TSM overlay"}}"#,
+                name
+            )),
+        };
+        let resp = build_response(status, reason, "application/json", body.as_bytes());
+        let _ = stream.write_all(&resp);
+        return req.keep_alive();
+    }
+
+    // ── Sovereign overlay GATEWAY: resolve → fetch → GOVERN → serve ──────────
+    // `/_tsm/<name>` loads the site behind a `.tsm` name. The fetched content is
+    // run through the SAME firewall detector before being served, so the overlay
+    // is governed by the AI control plane — clean content is served, malicious
+    // content (jailbreaks, secrets, PII) is blocked or redacted at the door.
+    if let Some(name) = path.strip_prefix("/_tsm/") {
+        let rec = match crate::overlay::resolver().resolve(name) {
+            Some(r) if r.verify() => r,
+            Some(_) => {
+                let b = format!(r#"{{"error":"overlay record failed signature verification","name":{:?}}}"#, name);
+                let resp = build_response(403, "Forbidden", "application/json", b.as_bytes());
+                let _ = stream.write_all(&resp);
+                return req.keep_alive();
+            }
+            None => {
+                let b = format!(r#"{{"error":"name not registered in the TSM overlay","name":{:?}}}"#, name);
+                let resp = build_response(404, "Not Found", "application/json", b.as_bytes());
+                let _ = stream.write_all(&resp);
+                return req.keep_alive();
+            }
+        };
+        let resp = match crate::overlay::fetch(&rec.endpoint) {
+            Ok((status, body)) => {
+                // Govern the fetched overlay content with the firewall pipeline.
+                let text = String::from_utf8_lossy(&body);
+                match Detector::new().scan(&text) {
+                    DetectVerdict::Block { pii_types, .. } => {
+                        let b = format!(
+                            r#"{{"error":"overlay content blocked by TSM firewall","name":{:?},"detected":{:?}}}"#,
+                            name, pii_types
+                        );
+                        build_response(403, "Forbidden", "application/json", b.as_bytes())
+                    }
+                    DetectVerdict::Redact { redacted, .. } =>
+                        build_response(200, "OK", "text/html; charset=utf-8", redacted.as_bytes()),
+                    _ =>
+                        build_response(if status == 0 { 200 } else { status }, "OK", "text/html; charset=utf-8", &body),
+                }
+            }
+            Err(e) => {
+                let b = format!(r#"{{"error":"overlay endpoint unreachable","name":{:?},"detail":{:?}}}"#, name, e);
+                build_response(502, "Bad Gateway", "application/json", b.as_bytes())
+            }
+        };
+        let _ = stream.write_all(&resp);
+        return req.keep_alive();
+    }
+
     // Parse AI request body
     let ai_req = match AiRequest::from_path_and_body(req.path, req.body) {
         Ok(r)  => r,
@@ -317,7 +386,7 @@ pub fn handle_connection(
                 use crate::detect::onnx_engine::SecurityLabel;
                 match onnx.label {
                     SecurityLabel::Clean => {
-                        log_debug!("pipeline", "ONNX resolved Ambiguous → Clean";
+                        crate::log_debug!("pipeline", "ONNX resolved Ambiguous → Clean";
                             "confidence" => onnx.confidence,
                             "latency_us" => onnx_us
                         );
@@ -352,8 +421,12 @@ pub fn handle_connection(
                 metrics().record_detector_call(det_start.elapsed().as_secs_f64() * 1000.0);
                 py_result.unwrap_or_else(|| fast_verdict.clone())
             } else {
-                // ONNX says low risk, no escalation needed
-                DetectVerdict::Clean
+                // ONNX is moderately unsure (0.70–0.85): not confident enough to
+                // act, not low enough to escalate. PRESERVE the fast-path verdict
+                // rather than silently clearing it — unresolved NER/ambiguous
+                // content must still reach the policy layer (e.g. to QUARANTINE),
+                // never be waved through as Clean (fail-secure, per #29).
+                fast_verdict.clone()
             }
         }
         other => other.clone(),
@@ -392,7 +465,8 @@ pub fn handle_connection(
         extract_session_id(&all_headers, req.body, auth_token, req.path)
     };
 
-    let is_sensitive = matches!(&policy_result.action, Action::Block { .. } | Action::RouteLocal);
+    let is_sensitive = matches!(&policy_result.action,
+        Action::Block { .. } | Action::RouteLocal | Action::Quarantine { .. });
 
     // ── Session pinning via distributed state (Redis if available) ────────────
     // Use distributed_state for cross-node session consistency. The in-memory
@@ -419,6 +493,39 @@ pub fn handle_connection(
         policy_result
     };
 
+    // ── Resolve redaction up-front (keeps audit/metrics truthful) ──────────────
+    // When policy says Redact we must emit a sanitized body NOW. The only
+    // reliable redaction source is the set of locally-computed PII spans; the
+    // local detector's precomputed `redacted` text is also trustworthy, but the
+    // Python detector path returns the original text verbatim. If we cannot
+    // produce a body that actually differs from the original, we MUST NOT
+    // forward to the cloud — fail secure by downgrading to Block.
+    let (policy_result, redacted_text): (crate::policy::PolicyResult, Option<String>) =
+        if matches!(policy_result.action, Action::Redact) {
+            let rt: Option<String> = if !spans.is_empty() {
+                Some(redact(&text, &spans))
+            } else if let DetectVerdict::Redact { redacted, .. } = &verdict {
+                // Guard against the Python path, which sets redacted == original.
+                if redacted != &text { Some(redacted.clone()) } else { None }
+            } else {
+                None
+            };
+            match rt {
+                Some(t) => (policy_result, Some(t)),
+                None => (
+                    crate::policy::PolicyResult {
+                        action: Action::Block {
+                            reason: "Redaction required but no spans available (fail-secure)".to_owned(),
+                        },
+                        rule_name: policy_result.rule_name.clone(),
+                    },
+                    None,
+                ),
+            }
+        } else {
+            (policy_result, None)
+        };
+
     // ── Merkle audit chain entry ──────────────────────────────────────────────
     // Append every request to the tamper-evident Merkle chain.
     // This runs after policy evaluation so the action is known.
@@ -428,6 +535,7 @@ pub fn handle_connection(
             Action::Block { .. }=> "block",
             Action::Redact     => "redact",
             Action::RouteLocal => "route_local",
+            Action::Quarantine { .. } => "quarantine",
             _                  => "allow",
         };
         if let Ok(mut chain) = merkle_chain.lock() {
@@ -441,6 +549,7 @@ pub fn handle_connection(
         Action::Block { .. }  => "block",
         Action::Redact        => "redact",
         Action::RouteLocal    => "route_local",
+        Action::Quarantine { .. } => "quarantine",
         _                     => "allow",
     };
 
@@ -499,8 +608,8 @@ pub fn handle_connection(
             latency_ms,
             detector_ms:       0.0,
             upstream_ms:       0.0,
-            prompt_tokens:     0,
-            completion_tokens: 0,
+            prompt_tokens:     estimate_prompt_tokens(&text) as i32,
+            completion_tokens: 0, // exact value captured from upstream usage (follow-up)
             prev_hash:         prev_h,
             entry_hash:        entry_h,
             traceparent:       traceparent.clone(),
@@ -563,7 +672,7 @@ pub fn handle_connection(
             ioc_match:           false,
             merkle_epoch,
             merkle_leaf_index:   merkle_leaf,
-            circuit_state:       pool.circuit_state(upstream_target.name).to_owned(),
+            circuit_state:       pool.circuit_state(resolve_upstream(&model).name).to_owned(),
         };
         ch.ingest(event);
     }
@@ -574,15 +683,15 @@ pub fn handle_connection(
 
     crate::telemetry::RequestLog {
         request_id:  &request_id,
-        method:      req.method,
-        path:        req.path,
+        method:      std::str::from_utf8(req.method).unwrap_or(""),
+        path:        std::str::from_utf8(req.path).unwrap_or(""),
         status:      if final_action == "block" { 400 } else { 200 },
         action:      final_action,
         rule_fired:  &policy_result.rule_name,
         pii_types:   &pii_types,
         risk_score,
         latency_ms,
-        upstream:    req.path,
+        upstream:    std::str::from_utf8(req.path).unwrap_or(""),
         client_ip:   &client_ip,
         traceparent: &traceparent,
     }.emit();
@@ -616,11 +725,10 @@ pub fn handle_connection(
             keep
         }
         Action::Redact => {
-            let redacted_text = match &verdict {
-                DetectVerdict::Redact { redacted, .. } => redacted.clone(),
-                _ => text.clone(),
-            };
-            let redacted_body = ai_req.redacted_bytes(&redacted_text);
+            // `redacted_text` was resolved up-front and is guaranteed `Some` when
+            // the action is Redact (otherwise it was downgraded to Block above).
+            let rt = redacted_text.unwrap_or_else(|| text.clone());
+            let redacted_body = ai_req.redacted_bytes(&rt);
             forward_request(stream, &ai_req, &redacted_body, &model, &trace_hdrs, &config, &pool,
                             &request_id, final_action)
         }
@@ -633,6 +741,19 @@ pub fn handle_connection(
                 forward_request(stream, &ai_req, req.body, &model, &trace_hdrs, &config, &pool,
                                 &request_id, final_action)
             }
+        }
+        Action::Quarantine { reason } => {
+            // Held for manual review — NOT forwarded to any model and NOT rejected.
+            // Distinct from Block (400): the request is isolated, not denied.
+            let body = format!(
+                "{{\"tsm\":{{\"status\":\"quarantined\",\"reason\":{:?},\"request_id\":{:?},\"message\":\"Request held for manual review; not forwarded to a model.\"}}}}",
+                reason, request_id
+            );
+            let resp = build_response(202, "Accepted", "application/json", body.as_bytes());
+            let _ = stream.write_all(&resp);
+            let keep = req.keep_alive();
+            std::mem::forget(stream);
+            keep
         }
         _ => {
             // Allow
@@ -803,7 +924,15 @@ fn forward_to_target(
         std::mem::forget(upstream);
         ok
     } else {
-        // Non-streaming: headers are the full response (body was read too)
+        // Non-streaming: headers + full body are buffered in header_bytes.
+        // Capture EXACT token usage from the provider's `usage` field for
+        // cross-provider cost tracking. Best-effort: parses a copy, never blocks
+        // or alters the relay below.
+        if let Some(hdr_end) = find_double_crlf(&header_bytes) {
+            if let Some((p, c)) = parse_usage(&header_bytes[hdr_end + 4..]) {
+                metrics().record_usage(target.name, p, c);
+            }
+        }
         let _ = client.write_all(&tagged_headers);
         std::mem::forget(upstream);
         true
@@ -1124,7 +1253,7 @@ fn parse_detector_response(
     Some(match action {
         "block"       => DetectVerdict::Block { pii_types, risk_score: risk, severity, spans: vec![] },
         "redact"      => DetectVerdict::Redact { pii_types, risk_score: risk, redacted: orig_text.to_owned() },
-        "route_local" => DetectVerdict::RouteLocal { pii_types, risk_score: risk },
+        "route_local" => DetectVerdict::RouteLocal { pii_types, risk_score: risk, spans: vec![] },
         _             => DetectVerdict::Clean,
     })
 }
@@ -1137,8 +1266,16 @@ fn extract_verdict_metadata(verdict: &DetectVerdict) -> (Vec<String>, f64, Vec<R
         DetectVerdict::Clean                                         => (vec![], 0.0, vec![]),
         DetectVerdict::Block { pii_types, risk_score, spans, .. }   => (pii_types.clone(), *risk_score, spans.clone()),
         DetectVerdict::Redact { pii_types, risk_score, .. }         => (pii_types.clone(), *risk_score, vec![]),
-        DetectVerdict::RouteLocal { pii_types, risk_score }         => (pii_types.clone(), *risk_score, vec![]),
-        DetectVerdict::Ambiguous { risk_score, .. }                  => (vec![], *risk_score, vec![]),
+        DetectVerdict::RouteLocal { pii_types, risk_score, spans }  => (pii_types.clone(), *risk_score, spans.clone()),
+        DetectVerdict::Ambiguous { risk_score, reason } => {
+            // NER-keyword content the fast path couldn't resolve becomes a review
+            // signal so the policy layer can QUARANTINE it (held, not forwarded).
+            let pii = match reason {
+                crate::detect::AmbiguousReason::NerKeywords => vec!["NER_REVIEW".to_owned()],
+                _ => vec![],
+            };
+            (pii, *risk_score, vec![])
+        }
     }
 }
 
@@ -1173,6 +1310,60 @@ fn unix_now() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+/// Rough input-token estimate (~4 chars/token, the common GPT heuristic) for
+/// cost/usage observability. This is the PROMPT (input) side, fully known at
+/// audit time; exact completion tokens come from the provider's `usage` field
+/// on the response (captured in the forward path — token-capture follow-up).
+fn estimate_prompt_tokens(text: &str) -> u32 {
+    ((text.chars().count() + 3) / 4) as u32
+}
+
+/// Parse EXACT token usage from an upstream JSON response body. Handles OpenAI
+/// (`usage.prompt_tokens`/`completion_tokens`) and Anthropic
+/// (`usage.input_tokens`/`output_tokens`). Returns `(prompt, completion)`, or
+/// `None` if the body isn't JSON or carries no usage (e.g. streaming/errors).
+fn parse_usage(body: &[u8]) -> Option<(u64, u64)> {
+    let v: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let usage = v.get("usage")?;
+    let prompt = usage.get("prompt_tokens")
+        .or_else(|| usage.get("input_tokens"))
+        .and_then(|n| n.as_u64())?;
+    let completion = usage.get("completion_tokens")
+        .or_else(|| usage.get("output_tokens"))
+        .and_then(|n| n.as_u64())?;
+    Some((prompt, completion))
+}
+
+#[cfg(test)]
+mod usage_tests {
+    use super::*;
+
+    #[test]
+    fn parse_openai_usage() {
+        let body = br#"{"id":"x","usage":{"prompt_tokens":12,"completion_tokens":34,"total_tokens":46}}"#;
+        assert_eq!(parse_usage(body), Some((12, 34)));
+    }
+
+    #[test]
+    fn parse_anthropic_usage() {
+        let body = br#"{"type":"message","usage":{"input_tokens":7,"output_tokens":21}}"#;
+        assert_eq!(parse_usage(body), Some((7, 21)));
+    }
+
+    #[test]
+    fn parse_usage_absent_or_invalid() {
+        assert_eq!(parse_usage(b"not json"), None);
+        assert_eq!(parse_usage(br#"{"choices":[]}"#), None);
+    }
+
+    #[test]
+    fn estimate_prompt_tokens_ceil_div_4() {
+        assert_eq!(estimate_prompt_tokens(""), 0);
+        assert_eq!(estimate_prompt_tokens("abcd"), 1);
+        assert_eq!(estimate_prompt_tokens("abcde"), 2);
+    }
 }
 
 /// Map a model name to its AI provider label for ClickHouse.

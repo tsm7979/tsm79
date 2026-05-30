@@ -26,6 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // the dependency on users who only build the fast-path binary).
     #[cfg(feature = "grpc")]
     {
+        // tonic-build writes into out_dir but does not create it.
+        std::fs::create_dir_all("src/gen")?;
         tonic_build::configure()
             .out_dir("src/gen")
             .build_client(true)

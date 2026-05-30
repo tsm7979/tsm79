@@ -30,7 +30,7 @@ type HmacSha256 = Hmac<Sha256>;
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct AuditEntry {
     pub seq:        u64,
     pub timestamp:  String,

@@ -18,6 +18,13 @@ pub enum Action {
     Redact,
     /// Forward to the local/on-prem model instead of the cloud upstream.
     RouteLocal,
+    /// Hold the request for manual review — do NOT forward to any model and do
+    /// NOT hard-reject. The client receives a "held for review" (202) response
+    /// and the event is audited as `quarantine`. Distinct from `Block` (which
+    /// rejects with 400): quarantine ISOLATES suspicious-but-unresolved content
+    /// for a human/async decision. Completes the PDF verdict taxonomy
+    /// (allow / redact / route / block / quarantine).
+    Quarantine { reason: String },
     /// Send to the Python detector for deep NER analysis.
     RequireDetector,
     /// Add extra audit metadata without changing the routing decision.

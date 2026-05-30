@@ -152,18 +152,23 @@ fn check_token_splitting(text: &str) -> Option<BpeVerdict> {
 /// Detect encoded payloads: base64 / hex / URL-encoded blocks.
 /// Decodes and rescans the decoded content for prohibited strings.
 fn check_encoded_payloads(text: &str) -> Option<BpeVerdict> {
-    // 1. URL decode
+    // 1. URL decode — only meaningful if decoding actually transformed the input.
+    // A plaintext secret (e.g. "sk-proj-…") is NOT a URL-encoded payload; it must
+    // fall through to the regex stage so it is attributed to its real type
+    // (OPENAI_KEY, …) instead of being mislabelled as a BPE encoding attack.
     let url_decoded = url_decode(text);
-    let normalized_url = normalize_homoglyphs(&url_decoded);
-    for prohibited in PROHIBITED_DECODED {
-        if normalized_url.contains(prohibited) {
-            return Some(BpeVerdict {
-                threat:    BpeThreat::EncodedPayload,
-                technique: "url_encoded_prohibited",
-                evidence:  format!("url-decoded contains '{}'", prohibited),
-                span_start: 0,
-                span_end:   text.len().min(120),
-            });
+    if url_decoded != text {
+        let normalized_url = normalize_homoglyphs(&url_decoded);
+        for prohibited in PROHIBITED_DECODED {
+            if normalized_url.contains(prohibited) {
+                return Some(BpeVerdict {
+                    threat:    BpeThreat::EncodedPayload,
+                    technique: "url_encoded_prohibited",
+                    evidence:  format!("url-decoded contains '{}'", prohibited),
+                    span_start: 0,
+                    span_end:   text.len().min(120),
+                });
+            }
         }
     }
 

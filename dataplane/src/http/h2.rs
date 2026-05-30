@@ -34,6 +34,9 @@ pub const FRAME_CONTINUATION:  u8 = 0x9;
 // Flags
 pub const FLAG_END_STREAM:    u8 = 0x1;
 pub const FLAG_END_HEADERS:   u8 = 0x4;
+
+// HTTP/2 error codes (RFC 7540 §7)
+pub const ERR_STREAM_CLOSED:  u32 = 0x5;
 pub const FLAG_PADDED:        u8 = 0x8;
 pub const FLAG_PRIORITY:      u8 = 0x20;
 pub const FLAG_ACK:           u8 = 0x1;

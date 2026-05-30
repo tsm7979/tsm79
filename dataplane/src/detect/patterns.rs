@@ -115,8 +115,10 @@ pub const NEGATION_WORDS: &[&str] = &[
 //
 // Literals are kept short to maximise hit rate while remaining unambiguous:
 //   - Secret keys have mandatory prefixes (sk-, ghp_, AKIA, etc.)
-//   - Credit cards and SSNs are caught by digit sequences ("4", "5", "3", "6" +
-//     digit run) — too broad for a literal, so they use the "@" / "-" fallback
+//   - Numeric PII (SSN, credit card, phone, IPv4) has NO fixed literal prefix,
+//     so it cannot live here. It is handled by the companion `numeric_prefilter`
+//     regex (see below), which `prefilter_matches` ORs in — otherwise pure-digit
+//     PII would skip the scan entirely (a fail-OPEN hole in the firewall).
 //   - The jailbreak pattern is triggered by its most-common keywords
 //   - Email requires "@" which is an extremely fast single-byte needle
 //
@@ -166,11 +168,29 @@ const LITERAL_PREFIXES: &[&str] = &[
     "jailbreak",
 ];
 
+// ── Numeric-PII shape pre-filter ─────────────────────────────────────────────
+//
+// Aho-Corasick is a *literal* automaton and cannot match the digit-pattern PII
+// types (SSN, credit card, phone, IPv4) — they have no fixed literal prefix.
+// Without this, a pure-numeric input ("My SSN is 123-45-6789") yields zero
+// literal hits and skips the regex scan entirely, silently missing real PII —
+// a fail-OPEN hole in a security firewall. This single cheap regex matches the
+// *shape* of every numeric pattern so the full scan runs. It is a deliberate
+// superset of the precise patterns (no BIN/Luhn/word-boundary checks): a false
+// positive merely triggers a regex pass that returns nothing.
+const NUMERIC_PREFILTER_PATTERN: &str = concat!(
+    r"\d{3}[-.\s]\d{2}[-.\s]\d{4}",          // SSN — 3-2-4 with separators
+    r"|\(?\d{3}\)?[-.\s]?\d{3}[-.\s]\d{4}",  // phone — 3-3-4, optional parens
+    r"|\d{13,16}",                            // credit card — 13–16 consecutive digits
+    r"|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  // IPv4 dotted quad
+);
+
 // ── Compiled singletons ───────────────────────────────────────────────────────
 
 static REGEX_SET:   OnceLock<RegexSet>    = OnceLock::new();
 static REGEXES:     OnceLock<Vec<Regex>>  = OnceLock::new();
 static AC_PREFILTER: OnceLock<AhoCorasick> = OnceLock::new();
+static NUMERIC_PREFILTER: OnceLock<Regex> = OnceLock::new();
 
 /// Return the compiled Aho-Corasick pre-filter automaton.
 ///
@@ -203,11 +223,23 @@ pub fn pattern_regexes() -> &'static Vec<Regex> {
     })
 }
 
-/// Fast pre-filter check: returns `true` if ANY literal prefix from
-/// `LITERAL_PREFIXES` appears in `text`.
+/// Return the compiled numeric-PII shape pre-filter regex — the companion to
+/// the Aho-Corasick literal automaton (see `NUMERIC_PREFILTER_PATTERN`).
+fn numeric_prefilter() -> &'static Regex {
+    NUMERIC_PREFILTER.get_or_init(|| {
+        Regex::new(NUMERIC_PREFILTER_PATTERN).expect("numeric prefilter must compile")
+    })
+}
+
+/// Fast pre-filter check: returns `true` if `text` contains ANY known literal
+/// prefix (`LITERAL_PREFIXES`, via Aho-Corasick) OR any numeric-PII shape
+/// (`NUMERIC_PREFILTER_PATTERN`, via regex).
 ///
 /// Call this before `pattern_set().matches(text)`.  If it returns `false`,
 /// the input is guaranteed clean and the full regex scan can be skipped.
+/// The literal automaton runs first (SIMD "teddy"); the numeric regex is only
+/// evaluated when the literal scan misses (short-circuit), so clean traffic
+/// pays for at most one extra fast pass.
 ///
 /// ```
 /// use crate::detect::patterns::prefilter_matches;
@@ -216,7 +248,7 @@ pub fn pattern_regexes() -> &'static Vec<Regex> {
 /// }
 /// ```
 pub fn prefilter_matches(text: &str) -> bool {
-    ac_prefilter().is_match(text)
+    ac_prefilter().is_match(text) || numeric_prefilter().is_match(text)
 }
 
 /// Check if any of the `NEGATION_WORDS` appear within a context window around
@@ -278,6 +310,27 @@ mod tests {
         // Pre-filter must return false so we never need to run the regex engine
         assert!(!prefilter_matches(text), "clean text should skip regex via prefilter");
         assert!(!pattern_set().is_match(text));
+    }
+
+    #[test]
+    fn numeric_pii_prefilter_hits() {
+        // Numeric PII has no literal prefix — without the companion regex these
+        // would skip the scan and fail OPEN. Each must trigger prefilter_matches.
+        assert!(prefilter_matches("My SSN is 123-45-6789"),     "SSN shape");
+        assert!(prefilter_matches("card: 4111111111111111"),   "credit-card shape");
+        assert!(prefilter_matches("call me at 555-123-4567"),   "phone shape");
+        assert!(prefilter_matches("reach me: (555) 123-4567"),  "phone w/ parens");
+        assert!(prefilter_matches("host at 192.168.1.1"),       "IPv4 dotted quad");
+        // And the full regex set must confirm the SSN/CC it gates.
+        assert!(pattern_set().is_match("My SSN is 123-45-6789"));
+    }
+
+    #[test]
+    fn small_numbers_still_skip_regex() {
+        // Short digit runs are NOT PII shapes — clean traffic must still skip.
+        assert!(!prefilter_matches("I have 5 apples and 3 oranges"), "single digits");
+        assert!(!prefilter_matches("the year 2024 was great"),       "4-digit year");
+        assert!(!prefilter_matches("order #12345 shipped"),          "5-digit id");
     }
 
     #[test]
