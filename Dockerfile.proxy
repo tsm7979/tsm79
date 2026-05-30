@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 # Install ALL deps including devDeps (tsc, tsx) needed to compile
 COPY proxy/package*.json ./
@@ -8,7 +8,7 @@ COPY proxy/tsconfig.json ./
 # Typecheck + compile TypeScript → dist/
 RUN npx tsc --noEmit && npx tsc
 
-FROM node:20-alpine
+FROM node:26-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 # Copy compiled output from builder; reinstall only production deps
