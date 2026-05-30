@@ -80,3 +80,32 @@ models/
 *.onnx
 *.pt
 *.bin
+
+# ─── Build artifacts: polyglot layer ──────────────────────
+# Java (Maven/Gradle target dirs + compiled classes)
+**/target/
+*.class
+*.jar
+*.war
+# C# / .NET (build + intermediate)
+**/bin/
+**/obj/
+*.dll
+*.pdb
+# Go compiled binaries
+overlay-node/overlay-node
+*.exe
+
+# ─── Landing artifacts (Vite + Playwright caps + DCC previews) ─
+landing/dist/
+landing/caps/
+landing/blender/*.png
+landing/blender/*.glb
+
+# ─── Local infra cache ────────────────────────────────────
+.cloudflared/cache/
+
+# ─── Editor / backup tmp ──────────────────────────────────
+*.bak
+*.orig
+*.tmp
