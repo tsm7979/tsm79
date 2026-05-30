@@ -6,7 +6,7 @@ pydantic>=2.0.0
 python-dotenv>=1.0.0
 
 # Database
-sqlalchemy>=2.0.0
+sqlalchemy>=2.0.50
 
 # Caching & Performance
 cachetools>=5.3.0
