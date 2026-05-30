@@ -11,11 +11,16 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 type Sev = "critical" | "high" | "medium";
 interface Rule { type: string; sev: Sev; re: RegExp; }
 
+// In-browser highlight rules — deliberately a touch more permissive than the
+// dataplane's production regex set so demo fixtures that include `_`/`-` to
+// avoid tripping public secret scanners (GitHub Push Protection, etc.) still
+// render with a [REDACTED] mark in the visual. The real engine in Rust enforces
+// the strict patterns.
 const RULES: Rule[] = [
-  { type: "GITHUB_TOKEN", sev: "critical", re: /\bghp_[A-Za-z0-9]{20,}\b/g },
+  { type: "GITHUB_TOKEN", sev: "critical", re: /\bghp_[A-Za-z0-9_-]{20,}\b/g },
   { type: "OPENAI_KEY",   sev: "critical", re: /\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b/g },
   { type: "ANTHROPIC_KEY",sev: "critical", re: /\bsk-ant-[A-Za-z0-9_-]{16,}\b/g },
-  { type: "AWS_KEY",      sev: "critical", re: /\bAKIA[0-9A-Z]{16}\b/g },
+  { type: "AWS_KEY",      sev: "critical", re: /\bAKIA[0-9A-Z_]{16,}\b/g },
   { type: "PRIVATE_KEY",  sev: "critical", re: /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/g },
   { type: "JWT",          sev: "high",     re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g },
   { type: "SSN",          sev: "high",     re: /\b\d{3}-\d{2}-\d{4}\b/g },
