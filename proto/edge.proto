@@ -1,0 +1,116 @@
+// edge.proto — contract between the Rust dataplane and the C++ wasmtime
+// edge worker host (`edge/`).
+//
+// After the dataplane's built-in policy stage decides an initial verdict,
+// it optionally invokes an operator-supplied Wasm worker — "policy as
+// code" extending the YAML DSL. The worker sees the prompt + the current
+// verdict and can:
+//   • leave the verdict unchanged
+//   • escalate (promote ALLOW → BLOCK, etc.)
+//   • add redaction spans the dataplane will apply before forwarding
+//   • replace the redacted body entirely (rare — for transform-heavy workers)
+//
+// The dataplane takes the MORE RESTRICTIVE of (built-in verdict, edge
+// verdict) unless the workspace has `allow_edge_de_escalation: true` (which
+// is OFF by default — see docs/POLICY.md).
+//
+// Generate:
+//   Python:  python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/edge.proto
+//   Rust:    tonic-build via dataplane/build.rs (see #28)
+//   C++:     protoc --cpp_out=. --grpc_cpp_out=. proto/edge.proto
+
+syntax = "proto3";
+
+package tsm.edge;
+
+option go_package = "github.com/tsm7979/tsm/proto/edge";
+
+// ── Verdict taxonomy — mirrors the dataplane's five-verdict model ─────────
+
+enum EdgeVerdict {
+  VERDICT_UNSPECIFIED = 0;
+  ALLOW               = 1;
+  REDACT              = 2;
+  ROUTE_LOCAL         = 3;
+  QUARANTINE          = 4;
+  BLOCK               = 5;
+}
+
+// ── Request body ──────────────────────────────────────────────────────────
+
+message RedactionSpan {
+  int32  start    = 1;   // byte offset in the original prompt
+  int32  end      = 2;
+  string pii_type = 3;   // GITHUB_TOKEN | SSN | … (free-form, surfaced in audit)
+  string severity = 4;   // critical | high | medium | low
+}
+
+message EdgeRequest {
+  // Tenant / request identification
+  string workspace_id     = 1;
+  string request_id       = 2;
+  string model            = 3;   // e.g. "gpt-4o"
+
+  // The actual prompt content the worker reasons about
+  string prompt           = 4;
+  bytes  body             = 5;   // full HTTP body — for workers that want raw access
+  map<string, string> headers = 6;
+
+  // The dataplane's current verdict (before invoking the worker)
+  EdgeVerdict current_verdict = 7;
+
+  // Redactions the dataplane has already decided to apply
+  repeated RedactionSpan current_redactions = 8;
+
+  // Which Wasm worker to invoke (the edge host loads workers by name)
+  string worker_name      = 9;
+  string worker_version   = 10;
+}
+
+// ── Response ──────────────────────────────────────────────────────────────
+
+message EdgeResponse {
+  // The worker's verdict. The dataplane reconciles this with its own:
+  //   max(built_in_verdict, edge_verdict) by severity order
+  // unless workspace `allow_edge_de_escalation` is true.
+  EdgeVerdict verdict = 1;
+
+  // Human-readable reason — surfaced in `X-TSM-Edge-Reason` on block and in
+  // the audit row. Bound to 256 chars; longer values are truncated.
+  string      reason  = 2;
+
+  // Additional redaction spans the worker wants applied on top of the
+  // dataplane's. Spans are unioned, not replaced.
+  repeated RedactionSpan additional_redactions = 3;
+
+  // Override the redacted body entirely. Use sparingly — for transform-heavy
+  // workers (PII tokenisation, format-preserving encryption, etc.). When
+  // `has_replacement_body` is true, `replacement_body` REPLACES the body the
+  // dataplane would have forwarded. When false, `replacement_body` is ignored.
+  bool   has_replacement_body = 4;
+  bytes  replacement_body     = 5;
+
+  // Telemetry from the worker — surfaced to Prometheus + ClickHouse
+  float  worker_latency_ms = 6;
+  uint64 worker_fuel_used  = 7;
+
+  // Non-fatal warnings the worker reports — included in audit row but do not
+  // change the verdict. For fatal errors, return a gRPC error status.
+  repeated string warnings = 8;
+}
+
+// ── Service ───────────────────────────────────────────────────────────────
+
+service EdgeService {
+  // Unary RPC — the only call the dataplane makes per request. The worker
+  // MUST respond within `TSM_EDGE_TIMEOUT_MS` (default 50 ms) or the
+  // dataplane treats the call as failed (see fail mode below).
+  //
+  // Fail mode (the dataplane's behaviour when the edge call fails):
+  //   • `TSM_EDGE_FAIL_OPEN=true`   → on timeout / unreachable / gRPC error,
+  //                                   keep the built-in verdict, log a warning
+  //   • `TSM_EDGE_FAIL_OPEN=false`  → on any failure, ESCALATE to BLOCK
+  //                                   (recommended for security-critical
+  //                                   workspaces; the default)
+  rpc RunWorker (EdgeRequest) returns (EdgeResponse);
+}
