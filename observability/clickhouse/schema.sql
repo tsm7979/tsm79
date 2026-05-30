@@ -93,9 +93,7 @@ CREATE TABLE IF NOT EXISTS tsm.ai_requests
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (org_id, timestamp, session_id)
 TTL date + INTERVAL 90 DAY
-    DELETE,
-    date + INTERVAL 30 DAY
-    TO DISK 'cold'
+    DELETE
 SETTINGS
     index_granularity = 8192,
     merge_with_ttl_timeout = 3600;

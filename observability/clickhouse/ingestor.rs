@@ -94,12 +94,12 @@ impl AiRequestEvent {
             escape_json(&self.policy_rule),
             escape_json(&self.detection_stage),
             self.detection_latency_us,
-            escape_json(&self.client_ip),
+            ipv4_or_zero(&self.client_ip),
             escape_json(&self.ja3_hash),
             escape_json(&self.ja4),
             if self.is_tor { 1 } else { 0 },
             escape_json(&self.tls_version),
-            escape_json(&self.original_dst_ip),
+            ipv4_or_zero(&self.original_dst_ip),
             self.original_dst_port,
             escape_json(&self.route_pin),
             if self.session_sensitive { 1 } else { 0 },
@@ -124,6 +124,12 @@ fn escape_json(s: &str) -> String {
      .replace('\n', "\\n")
      .replace('\r', "\\r")
      .replace('\t', "\\t")
+}
+
+/// ClickHouse `IPv4` columns cannot parse an empty string. When an address is
+/// absent (e.g. no TPROXY original destination), emit 0.0.0.0 instead of "".
+fn ipv4_or_zero(s: &str) -> &str {
+    if s.trim().is_empty() { "0.0.0.0" } else { s }
 }
 
 // ── Ingestor metrics ──────────────────────────────────────────────────────────
@@ -313,10 +319,23 @@ fn post_with_retry(url: &str, body: &[u8], metrics: &Arc<Mutex<IngestorMetrics>>
 
 /// Minimal synchronous HTTP POST (no reqwest/hyper dependency).
 fn http_post(url: &str, body: &[u8]) -> Result<u16, String> {
-    // Parse URL: http://host:port/path?query
+    // Parse URL: http://[user:pass@]host:port/path?query
     let url = url.trim_start_matches("http://");
-    let (host_port, path_query) = url.split_once('/').unwrap_or((url, ""));
+    let (authority, path_query) = url.split_once('/').unwrap_or((url, ""));
     let path = format!("/{}", path_query);
+
+    // Separate optional userinfo (user:password@) from host:port. ClickHouse
+    // credentials MUST be sent as X-ClickHouse-User/Key headers — left inline in
+    // the authority they break host resolution (we'd try to resolve a host named
+    // "tsm") and never authenticate, so every INSERT silently fails.
+    let (creds, host_port) = match authority.rsplit_once('@') {
+        Some((userinfo, hp)) => (Some(userinfo), hp),
+        None                 => (None, authority),
+    };
+    let (ch_user, ch_key) = match creds {
+        Some(ci) => ci.split_once(':').unwrap_or((ci, "")),
+        None     => ("default", ""),
+    };
 
     let addr: SocketAddr = host_port
         .parse()
@@ -341,11 +360,13 @@ fn http_post(url: &str, body: &[u8]) -> Result<u16, String> {
     let request = format!(
         "POST {} HTTP/1.1\r\n\
          Host: {}\r\n\
+         X-ClickHouse-User: {}\r\n\
+         X-ClickHouse-Key: {}\r\n\
          Content-Type: application/x-ndjson\r\n\
          Content-Length: {}\r\n\
          Connection: close\r\n\
          \r\n",
-        path, host_port, body.len()
+        path, host_port, ch_user, ch_key, body.len()
     );
 
     stream.write_all(request.as_bytes()).map_err(|e| format!("write header: {}", e))?;
