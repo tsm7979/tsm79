@@ -1,0 +1,49 @@
+cff-version: 1.2.0
+title: "TSM79 — Sovereign AI Control Plane"
+message: "If you reference this work in academic or industry publications, please cite it as below."
+authors:
+  - family-names: "TSM Pvt Ltd"
+    given-names: "The Sovereign Mechanica"
+    email: "founder@thesovereignmechanica.ai"
+    website: "https://www.thesovereignmechanica.ai/"
+repository-code: "https://github.com/tsm7979/tsm79"
+url: "https://www.thesovereignmechanica.ai/"
+abstract: >
+  TSM79 is an inline AI control plane that sits between an application and
+  every model it talks to. Each request is evaluated before it leaves the
+  perimeter: PII is detected and redacted, secrets are blocked, the request
+  is routed by policy, and the whole event is committed to a tamper-evident
+  audit ledger. The architecture is polyglot — Rust on the hot path, Python
+  for ML escalation, Go for control plane and the sovereign-overlay DHT,
+  Java for operator REST, C# for the policy DSL language server, C++ for
+  the Wasm edge worker host, and eBPF/XDP for kernel-level packet authority.
+  It also defines a self-certifying name layer (.tsm) that governs overlay
+  content through the same firewall.
+license: MIT
+version: "3.0.0"
+date-released: "2026-05-30"
+keywords:
+  - ai-security
+  - llm-security
+  - prompt-injection
+  - pii-detection
+  - dataplane
+  - ai-firewall
+  - ai-gateway
+  - ai-governance
+  - sovereign-overlay
+  - self-certifying-names
+  - ed25519
+  - libp2p
+  - rust
+  - ebpf
+  - wasm
+preferred-citation:
+  type: software
+  title: "TSM79 — Sovereign AI Control Plane"
+  authors:
+    - family-names: "TSM Pvt Ltd"
+      given-names: "The Sovereign Mechanica"
+  version: "3.0.0"
+  year: 2026
+  url: "https://github.com/tsm7979/tsm79"
