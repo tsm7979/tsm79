@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TSM Overlay</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; width: 300px; padding: 16px 18px;
+      font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #0b0e14; color: #e6e9ef;
+    }
+    h1 { font-size: 14px; margin: 0 0 2px; letter-spacing: .2px; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #6f7892; margin-right: 6px; vertical-align: middle; }
+    .dot.up { background: #5ad19a; } .dot.down { background: #e06c75; }
+    .row { color: #8b93a7; margin: 10px 0 0; }
+    code { background: #141925; padding: 1px 6px; border-radius: 5px; color: #b9c2da; word-break: break-all; }
+    .tip { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid #1d2433; color: #6f7892; font-size: 12px; }
+    .tip b { color: #b9c2da; }
+    a { color: #6f9bff; text-decoration: none; } a:hover { text-decoration: underline; }
+    button { margin-top: 6px; padding: 6px 10px; border: 1px solid #283044; border-radius: 7px; background: #141925; color: #e6e9ef; font: inherit; cursor: pointer; }
+    button:hover { border-color: #4c7dff; }
+  </style>
+</head>
+<body>
+  <h1>TSM Sovereign Overlay</h1>
+  <div class="row"><span id="dot" class="dot"></span><span id="status">checking gateway…</span></div>
+  <div class="row">Gateway: <code id="gw">…</code></div>
+  <div class="tip">
+    Type <b>tsm hub</b> in the address bar, or
+    <button id="test">open hub.tsm</button>
+    <div style="margin-top:8px"><a id="opts" href="#">Settings</a></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
