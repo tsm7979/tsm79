@@ -84,7 +84,10 @@ _BUILTIN_RULES: list[SanitizationRule] = [
     ),
     SanitizationRule(
         name="AWS_KEY", sensitivity=SensitivityLevel.RESTRICTED, strategy=RedactionStrategy.REDACT,
-        pattern=re.compile(r'AKIA[0-9A-Z]{16}'),
+        # Body class permits `_` and is `{16,}` — kept consistent with classifier.py
+        # so demo / test fixtures of the form AKIA_DEMO_FIXTURE_AB are sanitized
+        # without colliding with GitHub Push Protection's strict [A-Z0-9]{16} body.
+        pattern=re.compile(r'AKIA[0-9A-Z_]{16,}'),
     ),
     SanitizationRule(
         name="PRIVATE_KEY", sensitivity=SensitivityLevel.RESTRICTED, strategy=RedactionStrategy.REDACT,

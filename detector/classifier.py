@@ -107,12 +107,18 @@ _PATTERNS: list[tuple[str, str, re.Pattern, Any]] = [
     ("GITHUB_TOKEN",    "critical", re.compile(r'(ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}'), None),
     ("ANTHROPIC_KEY",   "critical", re.compile(r'sk-ant-[A-Za-z0-9\-_]{20,}'), None),
     ("OPENAI_KEY",      "critical", re.compile(r'sk-(?:proj-)?[A-Za-z0-9_\-]{20,}'), None),
-    ("STRIPE_SECRET",   "critical", re.compile(r'(sk|rk)_live_[A-Za-z0-9]{20,}'), None),
+    # Body class permits `_` so demo / test fixtures of the form
+    # sk_live_DEMO_FIXTURE_NOT_REAL... pass detection without colliding with
+    # GitHub Push Protection (which requires strict alphanumeric body).
+    ("STRIPE_SECRET",   "critical", re.compile(r'(sk|rk)_live_[A-Za-z0-9_]{20,}'), None),
     ("SENDGRID_KEY",    "critical", re.compile(r'SG\.[A-Za-z0-9\-_]{20,}'), None),
     ("HUGGINGFACE_KEY", "critical", re.compile(r'hf_[A-Za-z0-9]{20,}'), None),
     ("GITLAB_TOKEN",    "critical", re.compile(r'(glpat|gldt)-[A-Za-z0-9\-_]{20,}'), None),
     ("TWILIO_SID",      "critical", re.compile(r'SK[0-9a-f]{32}'), None),
-    ("AWS_KEY",         "critical", re.compile(r'AKIA[0-9A-Z]{16}'), None),
+    # Body class permits `_` and is `{16,}` so demo / test fixtures of the form
+    # AKIA_DEMO_FIXTURE_AB pass detection without colliding with GitHub Push
+    # Protection (which requires strict 16-char [A-Z0-9] body).
+    ("AWS_KEY",         "critical", re.compile(r'AKIA[0-9A-Z_]{16,}'), None),
     ("PRIVATE_KEY",     "critical", re.compile(r'-----BEGIN (RSA |EC )?PRIVATE KEY-----'), None),
 
     # PII — HIGH

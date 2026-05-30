@@ -63,12 +63,16 @@ const PATTERNS: &[&str] = &[
     r"sk-(?:proj-)?[A-Za-z0-9_\-]{20,}",
     // 3: Anthropic key
     r"sk-ant-[A-Za-z0-9_\-]{20,}",
-    // 4: AWS access key
-    r"(?i)\b(?:AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[0-9A-Z]{16}\b",
+    // 4: AWS access key — body class permits `_` and is `{16,}` so demo / test
+    // fixtures of the form AKIA_DEMO_FIXTURE_AB pass detection without
+    // colliding with GitHub Push Protection (which requires strict [A-Z0-9]{16}).
+    r"(?i)\b(?:AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[0-9A-Z_]{16,}\b",
     // 5: GitHub token (classic ghp_*, fine-grained github_pat_*)
     r"(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{36,}",
-    // 6: Stripe secret key
-    r"sk_(?:live|test)_[A-Za-z0-9]{24,}",
+    // 6: Stripe secret key — body class permits `_` so demo / test fixtures of
+    // the form sk_live_DEMO_FIXTURE_NOT_REAL... pass detection without colliding
+    // with GitHub Push Protection's strict alphanumeric body requirement.
+    r"sk_(?:live|test)_[A-Za-z0-9_]{24,}",
     // 7: PEM private key
     r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----",
     // 8: SendGrid
