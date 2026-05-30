@@ -36,24 +36,53 @@ _MOCK_MODULES = [
     "spacy",
 ]
 
+import unittest.mock as _m
+
+_MISSING = object()
+# (module, attribute) → stub for symbols detector.main binds at module load.
+_ATTR_STUBS = {
+    ("detector.correlation", "correlate"):           _m.MagicMock(return_value=(False, 0.0, 0)),
+    ("detector.correlation", "correlation_stats"):   _m.MagicMock(return_value={}),
+    ("detector.behavioral",  "get_analyzer"):        _m.MagicMock(),
+    ("detector.anomaly",     "get_anomaly_detector"):_m.MagicMock(),
+    ("detector.semantic",    "get_semantic_detector"):_m.MagicMock(return_value=MagicMock(available=False)),
+    ("detector.workspace",   "registry"):            MagicMock(),
+    ("detector.risk_scorer", "score_findings"):      _m.MagicMock(return_value=(0.0, 0, [])),
+    ("detector.risk_scorer", "severity_from_level"): _m.MagicMock(return_value="none"),
+}
+
+# Snapshot global state, install mocks, then restore after importing detector.main.
+# detector.main binds these symbols via `from X import ...` at import time, so it
+# keeps the stubs even after we restore sys.modules — this prevents the mocks from
+# leaking into other test files (test_semantic / test_policy_engine / etc.) and
+# from corrupting real modules already imported earlier in the session.
+_saved_modules = {_mod: sys.modules.get(_mod) for _mod in _MOCK_MODULES}
 for _mod in _MOCK_MODULES:
     sys.modules.setdefault(_mod, MagicMock())
 
-# Provide minimal attribute mocks for symbols imported at module level
-import unittest.mock as _m
-sys.modules["detector.correlation"].correlate       = _m.MagicMock(return_value=(False, 0.0, 0))
-sys.modules["detector.correlation"].correlation_stats = _m.MagicMock(return_value={})
-sys.modules["detector.behavioral"].get_analyzer    = _m.MagicMock()
-sys.modules["detector.anomaly"].get_anomaly_detector = _m.MagicMock()
-sys.modules["detector.semantic"].get_semantic_detector = _m.MagicMock(
-    return_value=MagicMock(available=False)
-)
-sys.modules["detector.workspace"].registry = MagicMock()
-sys.modules["detector.risk_scorer"].score_findings    = _m.MagicMock(return_value=(0.0, 0, []))
-sys.modules["detector.risk_scorer"].severity_from_level = _m.MagicMock(return_value="none")
+_saved_attrs = {key: getattr(sys.modules[key[0]], key[1], _MISSING) for key in _ATTR_STUBS}
+for (mod_name, attr), stub in _ATTR_STUBS.items():
+    setattr(sys.modules[mod_name], attr, stub)
 
 # Now we can import the pieces we actually want to test
 from detector.main import _Metrics, _write_audit  # noqa: E402
+
+# ── Undo every global mutation so other test files import the REAL modules. ──
+for (mod_name, attr), old in _saved_attrs.items():
+    # Only restore on modules that pre-existed (real); installed mocks get popped below.
+    if _saved_modules.get(mod_name) is not None and sys.modules.get(mod_name) is _saved_modules[mod_name]:
+        if old is _MISSING:
+            try:
+                delattr(sys.modules[mod_name], attr)
+            except AttributeError:
+                pass
+        else:
+            setattr(sys.modules[mod_name], attr, old)
+for _mod, _orig in _saved_modules.items():
+    if _orig is None:
+        sys.modules.pop(_mod, None)
+    else:
+        sys.modules[_mod] = _orig
 
 
 # ── _Metrics unit tests ───────────────────────────────────────────────────────

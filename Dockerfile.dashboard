@@ -4,13 +4,15 @@ COPY dashboard/package*.json ./
 RUN npm ci
 COPY dashboard/ ./
 RUN npm run build
+# Guarantee a public/ dir exists so the runtime COPY below never fails
+RUN mkdir -p /app/public
 
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public 2>/dev/null || true
+COPY --from=builder /app/public ./public
 EXPOSE 3001
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
   CMD wget -qO- http://localhost:3001/ || exit 1

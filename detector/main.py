@@ -331,9 +331,11 @@ async def _detect_impl(req: DetectRequest) -> DetectResponse:
             action="block",
             pii_types=cascade_verdict.pii_types,
             severity="critical",
-            redacted_body=dict(req.model_dump()),
+            # Redact even on block: a rejected request's echoed body must not
+            # leak the secret/PII that triggered the block (defense-in-depth).
+            redacted_body=_redact_body_messages(req),
             findings=[],
-            policy_rule=f"cascade-{cascade_verdict.tier}",
+            policy_rule=f"cascade-{cascade_verdict.tier}-block",
             latency_ms=round(latency, 2),
             presidio_available=presidio_available(),
         )
@@ -343,7 +345,7 @@ async def _detect_impl(req: DetectRequest) -> DetectResponse:
 
     # ── Stage 2: LLM-assisted classification for ambiguous findings ─────────
     if scan.needs_llm_assist:
-        llm_findings = await classifier.llm_classify(text, scan.findings)
+        llm_findings = await classifier.llm_classify(text, scan.raw_findings)
         scan.merge_llm(llm_findings)
 
     # ── Stage 3: Structural parsing (API keys, JWTs, etc.) ───────────────

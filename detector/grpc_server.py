@@ -107,7 +107,7 @@ class DetectServicer:
 
         # ── LLM-assisted classification (ambiguous only) ───────────────────────
         if scan.needs_llm_assist:
-            llm_findings = await _classifier.llm_classify(text, scan.findings)
+            llm_findings = await _classifier.llm_classify(text, scan.raw_findings)
             scan.merge_llm(llm_findings)
 
         # ── CVSS risk scoring ─────────────────────────────────────────────────
@@ -149,10 +149,10 @@ class DetectServicer:
         if _STUBS_OK:
             spans = [
                 pb2.Span(
-                    start=0, end=0,
+                    start=f.get("start", 0), end=f.get("end", 0),
                     pii_type=f.get("type", ""),
                     severity=f.get("severity", ""),
-                    layer=f.get("context", "")[:32],
+                    layer=f.get("layer", "regex"),
                 )
                 for f in scan.raw_findings
             ]

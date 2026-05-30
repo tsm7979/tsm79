@@ -35,9 +35,9 @@ SELECT
     COUNT(*) FILTER (WHERE action = 'redact')          AS redacted,
     COUNT(*) FILTER (WHERE action = 'allow')           AS allowed,
     COUNT(*) FILTER (WHERE action = 'rate_limited')    AS rate_limited,
-    ROUND(AVG(risk_score),1)                           AS avg_risk,
-    ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP
-          (ORDER BY latency_ms), 2)                    AS p95_latency_ms,
+    ROUND(AVG(risk_score)::numeric,1)                  AS avg_risk,
+    ROUND((PERCENTILE_CONT(0.95) WITHIN GROUP
+          (ORDER BY latency_ms))::numeric, 2)          AS p95_latency_ms,
     COUNT(*) FILTER
         (WHERE 'JAILBREAK' = ANY(pii_types))           AS jailbreak_attempts,
     COUNT(*) FILTER
@@ -59,7 +59,7 @@ SELECT
     workspace_id,
     COUNT(*)                                           AS request_count,
     COUNT(*) FILTER (WHERE action = 'block')           AS blocked_count,
-    ROUND(AVG(risk_score),1)                           AS avg_risk,
+    ROUND(AVG(risk_score)::numeric,1)                  AS avg_risk,
     ARRAY_AGG(DISTINCT unnested_pii) FILTER
         (WHERE unnested_pii IS NOT NULL)               AS pii_types_seen,
     MAX(ts)                                            AS last_seen
@@ -162,7 +162,7 @@ $$;
 -- ── pg_cron scheduled jobs (requires pg_cron extension) ──────────────────────
 -- Install: CREATE EXTENSION pg_cron;
 -- These are idempotent — safe to re-run.
-DO $$
+DO $do$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
         -- Refresh hourly metrics every hour at :01
@@ -201,7 +201,7 @@ BEGIN
         RAISE NOTICE 'pg_cron not installed — schedule jobs manually';
     END IF;
 END;
-$$;
+$do$;
 
 -- ── Row-level security (enable for multi-tenant isolation) ───────────────────
 -- Each API key can only see rows for its own workspace_id.

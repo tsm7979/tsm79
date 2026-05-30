@@ -2,4 +2,8 @@ fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 pydantic>=2.7.0
 spacy>=3.7.0
+# typed RPC contract (proto/detect.proto) served by detector.grpc_server
+grpcio>=1.62.0
+protobuf>=4.25.0
+redis>=5.0.0
 # After install: python -m spacy download en_core_web_sm

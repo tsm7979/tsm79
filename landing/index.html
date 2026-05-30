@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TSM79 — The Sovereign Mechanica · The AI Firewall</title>
+  <meta name="description" content="TSM79 is an inline AI control plane. Every prompt your stack sends to a model passes through TSM first — inspected for PII and secrets, redacted, routed, and logged to a tamper-evident ledger. Zero code changes." />
+  <meta name="theme-color" content="#06080a" />
+  <meta property="og:title" content="TSM79 — The AI Firewall" />
+  <meta property="og:description" content="Sovereign control over every AI request. Inspect, redact, route, audit — inline, in real time." />
+</head>
+<body>
+  <a href="#hero" class="sr-only">Skip to content</a>
+  <div class="loader" data-loader>
+    <div class="loader-inner">
+      <span class="loader-brand">TSM<b>·</b>79</span>
+      <span class="loader-tag">Initialising the sovereign control plane</span>
+      <span class="loader-count"><span data-load>00</span><i>%</i></span>
+      <div class="loader-bar"><b data-load-bar></b></div>
+    </div>
+  </div>
+  <canvas class="webgl" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="cursor" aria-hidden="true"></div>
+  <div class="cursor-dot" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="#hero" class="brand">TSM<b>·</b>79</a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#firewall">Firewall</a>
+      <a href="#features">Platform</a>
+      <a href="#sovereign">Sovereign</a>
+      <a href="#deploy">Deploy</a>
+    </nav>
+    <a href="mailto:pilot@thesovereignmechanica.ai?subject=Book a pilot — TSM79" class="btn btn--solid">Book a pilot</a>
+  </header>
+
+  <main data-barba="wrapper">
+    <article data-barba="container" data-barba-namespace="home">
+
+      <!-- HERO — pinned centre reel: scroll cycles the words in place, page stays put -->
+      <section id="hero" class="reel">
+        <div class="reel-pin">
+          <span class="reel-tag reel-tag--top">The Sovereign Mechanica · v79</span>
+          <div class="reel-words">
+            <div class="reel-st is-active"><span class="reel-l">Sovereign</span><span class="reel-r">control<span class="dot">.</span></span></div>
+            <div class="reel-st"><span class="reel-l">Inspect</span><span class="reel-r">every prompt</span></div>
+            <div class="reel-st"><span class="reel-l">Redact</span><span class="reel-r">secrets &amp; PII</span></div>
+            <div class="reel-st"><span class="reel-l">Route</span><span class="reel-r">by policy</span></div>
+            <div class="reel-st"><span class="reel-l">Govern</span><span class="reel-r">with proof</span></div>
+            <div class="reel-st"><span class="reel-l">Sovereign</span><span class="reel-r">your keys</span></div>
+          </div>
+          <span class="reel-tag reel-tag--bot" data-reel-bot>The AI Firewall · zero code changes</span>
+          <div class="reel-cta"><a href="mailto:pilot@thesovereignmechanica.ai?subject=Book a pilot — TSM79" class="btn btn--solid">Book a pilot →</a></div>
+          <div class="reel-progress" aria-hidden="true"><b data-reel-bar></b></div>
+        </div>
+      </section>
+
+      <!-- PROBLEM (editorial / storytelling arc) -->
+      <section id="problem" class="problem wrap">
+        <span class="eyebrow reveal">The exposure</span>
+        <p class="problem-statement" data-problem>
+          Every day your apps send millions of prompts to models you don't own —
+          carrying secrets, customer PII, and source code straight past your perimeter.
+          One leaked key. One unredacted record. One prompt you can't prove you logged.
+        </p>
+        <div class="problem-foot reveal">
+          <span>LLMs are in production everywhere.</span>
+          <span>Almost no one has inline control over what those prompts contain — until they leak.</span>
+        </div>
+      </section>
+
+      <!-- KINETIC SIGNATURE SENTENCE -->
+      <section id="firewall" class="kinetic">
+        <div class="wrap">
+          <span class="eyebrow reveal" style="margin-bottom:var(--s6);display:flex">How it works</span>
+          <p data-kinetic>
+            Every prompt goes through TSM first — it
+            <span class="chip scan">scans</span> for PII &amp; secrets,
+            <span class="chip redact">redacts</span> them,
+            <span class="chip route">routes</span> sensitive calls to a local model,
+            <span class="chip block">blocks</span> what must never leave,
+            and <span class="chip log">logs</span> everything to a tamper-evident ledger.
+          </p>
+        </div>
+      </section>
+
+      <!-- LIVE INSPECTION (signature interaction) -->
+      <section id="inspect" class="inspect wrap">
+        <div class="inspect-head">
+          <span class="eyebrow reveal">Try it — live, in your browser</span>
+          <h2 class="reveal">Inspect a prompt.</h2>
+          <p class="lead reveal">Type anything, or drop in a sample. TSM runs the same detection classes the engine uses and decides — allow, redact, or block — in real time. Nothing leaves this page.</p>
+        </div>
+        <div class="inspect-stage reveal" data-inspect>
+          <div class="inspect-samples">
+            <span class="k">inject</span>
+            <button data-sample="ssn" class="on">SSN</button>
+            <button data-sample="token">GitHub token</button>
+            <button data-sample="aws">AWS key</button>
+            <button data-sample="card">Credit card</button>
+            <button data-sample="clean">Clean</button>
+          </div>
+          <div class="inspect-grid">
+            <div class="inspect-col">
+              <label class="k">prompt</label>
+              <div class="inspect-editor">
+                <div class="inspect-hl" data-inspect-hl aria-hidden="true"></div>
+                <textarea data-inspect-input spellcheck="false" aria-label="Prompt to inspect"></textarea>
+              </div>
+            </div>
+            <div class="inspect-col">
+              <div class="inspect-verdict-row">
+                <span class="inspect-verdict" data-inspect-verdict data-v="REDACT">REDACT</span>
+                <span class="inspect-latency"><b data-inspect-latency>12ms</b> added</span>
+              </div>
+              <div class="inspect-chips" data-inspect-chips></div>
+              <label class="k">sent upstream</label>
+              <div class="inspect-out" data-inspect-out></div>
+              <div class="inspect-route" data-inspect-route data-v="REDACT"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PHASES — pinned scrollytelling -->
+      <section id="sovereign" class="phases" data-phases>
+        <div class="phases-pin">
+          <div class="phase-copy wrap" style="grid-column:1">
+            <div class="phase-step active" data-step="0">
+              <span class="num">Phase 01 / Firewall</span>
+              <h2>Inspect &amp; route every request, inline.</h2>
+              <p>A low-latency proxy intercepts each model call. Regex, entropy, structural parsing and LLM-assist detect secrets and PII; policy decides allow, redact, route-local, or block — in under 100ms.</p>
+            </div>
+            <div class="phase-step" data-step="1">
+              <span class="num">Phase 02 / Governance</span>
+              <h2>RBAC, approvals &amp; an audit you can prove.</h2>
+              <p>Workspaces, roles, policy-as-code and approval workflows. Every decision is written to an immutable, Merkle-chained ledger — exportable for SOC2, HIPAA and GDPR review.</p>
+            </div>
+            <div class="phase-step" data-step="2">
+              <span class="num">Phase 03 / Sovereign Stack</span>
+              <h2>Your models. Your keys. Your jurisdiction.</h2>
+              <p>Model-agnostic routing across cloud and on-prem. BYOK, data residency, air-gapped deployment. The control plane is yours — not a vendor's black box.</p>
+            </div>
+          </div>
+          <div class="phase-vis" style="grid-column:2" aria-hidden="true"><b class="phase-figure" data-phase-fig>01</b></div>
+        </div>
+        <div class="phase-progress" aria-hidden="true">
+          <i><b data-bar="0"></b></i><i><b data-bar="1"></b></i><i><b data-bar="2"></b></i>
+        </div>
+      </section>
+
+      <!-- BENTO FEATURES -->
+      <section id="features" class="wrap" style="padding-block:var(--s10)">
+        <div class="bento-head">
+          <h2 class="reveal">One control plane. <br/>Total oversight.</h2>
+          <p class="lead reveal">Years of security tooling, distilled into a single inline layer that sits between your apps and every model they call.</p>
+        </div>
+        <div class="bento" data-bento>
+          <div class="cell cell--wide cell--tall reveal">
+            <span class="k">Detection pipeline</span>
+            <h3>Four-stage detection that catches what regex alone can't.</h3>
+            <p>Regex + entropy + structural parsing + LLM-assist. Catches SSNs, cards, GitHub / OpenAI / AWS keys &amp; jailbreaks.</p>
+          </div>
+          <div class="cell cell--third reveal"><span class="k">Latency</span><div class="big">&lt;100<small>ms</small></div><p>p95 added, inline.</p></div>
+          <div class="cell cell--third reveal"><span class="k">Routing</span><h3>Model-agnostic.</h3><p>OpenAI, Anthropic, local Ollama — chosen by policy, cost &amp; compliance.</p></div>
+          <div class="cell cell--third reveal"><span class="k">Audit</span><h3>Tamper-evident.</h3><p>Merkle-chained ledger. Verify integrity, export for compliance.</p></div>
+          <div class="cell cell--third reveal"><span class="k">Policy</span><h3>Policy-as-code.</h3><p>Declarable rule DSL, hot-reloaded. No restart, no redeploy.</p></div>
+          <div class="cell cell--mid reveal"><span class="k">Integration</span><h3>Zero code changes.</h3><p><code>export OPENAI_BASE_URL=…</code> — point your existing SDK at TSM and ship. Nothing else changes.</p></div>
+          <div class="cell cell--mid reveal"><span class="k">Sovereignty</span><h3>BYOK · on-prem · air-gapped.</h3><p>RBAC, multi-tenancy, data residency. Built for regulated verticals.</p></div>
+        </div>
+      </section>
+
+      <!-- MARKET OPPORTUNITY -->
+      <section id="market" class="market wrap">
+        <div class="market-head">
+          <span class="eyebrow reveal">The opportunity</span>
+          <h2 class="reveal">A category being<br/>defined right now.</h2>
+          <p class="lead reveal">Every enterprise is shipping LLMs. Almost none have an inline layer that governs them. That layer is the prize.</p>
+        </div>
+        <div class="market-figure">
+          <div class="market-tam reveal">
+            <span class="market-num">$<span data-count="15">0</span>B</span>
+            <span class="market-cap">serviceable AI-control-plane market — and the inline layer is still unclaimed.</span>
+          </div>
+          <div class="market-scale reveal" aria-hidden="true">
+            <div class="ms-row"><b>Conservative</b><i><span data-bar-w="33"></span></i><em>$5B</em></div>
+            <div class="ms-row on"><b>Mid-range</b><i><span data-bar-w="66"></span></i><em>$15B</em></div>
+            <div class="ms-row"><b>Infra-scale</b><i><span data-bar-w="100"></span></i><em>$45B</em></div>
+          </div>
+        </div>
+        <div class="market-verticals reveal">
+          <span class="k">Built for high-stakes, regulated verticals</span>
+          <ul>
+            <li>Financial services</li><li>Healthcare &amp; life sciences</li><li>Technology &amp; SaaS</li><li>Manufacturing &amp; energy</li><li>Government &amp; defense</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- WHO IT'S FOR -->
+      <section id="who" class="who wrap">
+        <div class="bento-head">
+          <h2 class="reveal">Who runs on TSM.</h2>
+          <p class="lead reveal">One control plane, three motions — from scaling teams to sovereign institutions.</p>
+        </div>
+        <div class="who-grid">
+          <article class="who-card reveal">
+            <span class="k">Mid-market</span>
+            <h3>Scaling SaaS, fintech &amp; health&nbsp;tech</h3>
+            <p>Stop leaks, control model spend, ship governance — without a platform team.</p>
+            <span class="who-arr"><b>$20k–250k</b><i>/ year</i></span>
+          </article>
+          <article class="who-card reveal">
+            <span class="k">Enterprise</span>
+            <h3>Banks, insurers &amp; global tech</h3>
+            <p>Cross-team policy, RBAC &amp; approvals, and an audit you can prove.</p>
+            <span class="who-arr"><b>$150k–2M+</b><i>/ year</i></span>
+          </article>
+          <article class="who-card reveal">
+            <span class="k">Sovereign</span>
+            <h3>Government, defense &amp; regulated</h3>
+            <p>Data residency, BYOK, air-gapped deployment. Your jurisdiction, your keys.</p>
+            <span class="who-arr"><b>$300k–3M+</b><i>/ year</i></span>
+          </article>
+        </div>
+      </section>
+
+      <!-- STATS -->
+      <section class="wrap"><div class="stats" data-stats>
+        <div class="stat"><div class="v"><span data-count="100">0</span><small>ms</small></div><div class="l">p95 added latency</div></div>
+        <div class="stat"><div class="v"><span data-count="99.9" data-dec="1">0</span><small>%</small></div><div class="l">request-path uptime</div></div>
+        <div class="stat"><div class="v"><span data-count="1">0</span></div><div class="l">line to integrate</div></div>
+        <div class="stat"><div class="v"><span data-count="0">0</span></div><div class="l">prompts leaked</div></div>
+      </div></section>
+
+      <!-- MARQUEE -->
+      <section class="marquee" aria-hidden="true">
+        <div class="marquee-track" data-marquee>
+          <span>PII Redaction</span><span>Secret Detection</span><span>Model Routing</span><span>Tamper-Evident Audit</span><span>Zero-Trust</span><span>Policy-as-Code</span>
+          <span>PII Redaction</span><span>Secret Detection</span><span>Model Routing</span><span>Tamper-Evident Audit</span><span>Zero-Trust</span><span>Policy-as-Code</span>
+        </div>
+      </section>
+
+      <!-- PRICING -->
+      <section id="pricing" class="pricing wrap">
+        <div class="bento-head">
+          <span class="eyebrow reveal">Pricing</span>
+          <h2 class="reveal">Start free.<br/>Govern at scale.</h2>
+        </div>
+        <div class="price-grid">
+          <article class="price reveal">
+            <span class="price-name">Free</span>
+            <span class="price-fig">$0</span>
+            <p>10k tokens / mo · 7-day retention · core detection. For your first integration.</p>
+          </article>
+          <article class="price reveal">
+            <span class="price-name">Team</span>
+            <span class="price-fig">$500<i>+ /mo</i></span>
+            <p>Seats + usage · standard policies · observability. For product teams.</p>
+          </article>
+          <article class="price reveal">
+            <span class="price-name">Company</span>
+            <span class="price-fig">$20k<i>+ /yr</i></span>
+            <p>Advanced policy · model routing · long retention · SSO &amp; RBAC.</p>
+          </article>
+          <article class="price reveal price--ent">
+            <span class="price-name">Enterprise</span>
+            <span class="price-fig">Custom</span>
+            <p>BYOK · on-prem / air-gapped · SLAs · compliance evidence · pro services.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section id="deploy" class="cta wrap">
+        <span class="eyebrow reveal">Take sovereign control</span>
+        <h2 class="reveal" data-split>It's your AI. <br/>Govern it.</h2>
+        <div class="hero-cta reveal" style="justify-content:center">
+          <a href="mailto:pilot@thesovereignmechanica.ai?subject=Book a pilot — TSM79" class="btn btn--solid">Book a pilot →</a>
+        </div>
+      </section>
+
+      <footer class="wrap">
+        <span>© 2026 The Sovereign Mechanica</span>
+        <span>Sovereign · Control · Govern</span>
+        <span>TSM·79</span>
+      </footer>
+
+    </article>
+  </main>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

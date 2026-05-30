@@ -198,9 +198,12 @@ class Classifier:
         for name, severity, pattern, validator in _PATTERNS:
             for m in pattern.finditer(text):
                 start, end = m.start(), m.end()
-                # Context negation window
-                window = text[max(0, start - _NEGATION_WINDOW): min(len(text), end + _NEGATION_WINDOW)]
-                if _NEGATION_WORDS.search(window):
+                # Context negation: inspect text BEFORE and AFTER the match, but not
+                # the match itself — otherwise an entity whose own value contains a
+                # cue word (e.g. user@example.com, sk-...test...) is wrongly skipped.
+                before = text[max(0, start - _NEGATION_WINDOW): start]
+                after  = text[end: end + _NEGATION_WINDOW]
+                if _NEGATION_WORDS.search(before) or _NEGATION_WORDS.search(after):
                     continue
                 raw = m.group()
                 # Extra validation
@@ -357,3 +360,64 @@ class Classifier:
             return results
         except Exception:
             return []
+
+
+# ── Module-level entry point (canonical detection API) ────────────────────────
+# Used by the proxy, the detector gRPC service, and speculative_security tier-0.
+
+_CLASSIFIER: Classifier | None = None
+
+
+def get_classifier() -> Classifier:
+    global _CLASSIFIER
+    if _CLASSIFIER is None:
+        _CLASSIFIER = Classifier()
+    return _CLASSIFIER
+
+
+def classify_text(text: str) -> dict:
+    """Run the full deterministic detection pipeline and return a verdict dict.
+
+    Returns:
+        {
+          "verdict":        "block" | "clean" | "ambiguous",
+          "risk_score":     float (0–100),
+          "severity":       "none" | "low" | "medium" | "high" | "critical",
+          "pii_types":      list[str],
+          "redacted_text":  str,
+          "findings":       list[dict],
+          "needs_llm_assist": bool,
+        }
+
+    verdict semantics:
+      • block      — a critical/high secret or PII was detected (must not leave)
+      • clean      — nothing sensitive found, no deeper analysis needed
+      • ambiguous  — low/medium signal; caller may escalate to LLM/semantic tiers
+    """
+    clf = get_classifier()
+    result = clf.scan(text)
+
+    # Fold in structural findings (JWTs, high-entropy secrets) and NER prose PII.
+    structural = clf.structural_scan(text)
+    if structural:
+        result.merge_structural(structural)
+    ner = clf.ner_scan(text)
+    if ner:
+        result.merge_structural(ner)
+
+    if result.severity in ("critical", "high"):
+        verdict = "block"
+    elif result.risk_score <= 0.0 and not result.needs_llm_assist:
+        verdict = "clean"
+    else:
+        verdict = "ambiguous"
+
+    return {
+        "verdict":          verdict,
+        "risk_score":       result.risk_score,
+        "severity":         result.severity,
+        "pii_types":        result.pii_types,
+        "redacted_text":    result.redacted_text,
+        "findings":         result.raw_findings,
+        "needs_llm_assist": result.needs_llm_assist,
+    }
