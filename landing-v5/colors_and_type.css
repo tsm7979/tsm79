@@ -1,0 +1,428 @@
+/* =====================================================================
+   TSM — The Sovereign Mechanica · DESIGN TOKENS
+   Single source of truth for colour, type, spacing, motion.
+   Import as: <link rel="stylesheet" href="./colors_and_type.css">
+   ===================================================================== */
+
+/* ---- Webfonts ----------------------------------------------------- */
+/* PRIMARY (per design-direction screenshot): Inter Tight + Editorial New.
+   Editorial New (PP Editorial New / Pangram Pangram) is a paid licensed face.
+   Closest free Google Font substitute: Newsreader (italic, optical-sized).
+   When the .woff2 of PP Editorial New is supplied, drop it into /fonts/
+   and replace the import below. */
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@300;400;500;600&family=Anton&family=Big+Shoulders+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+/* Local OFL faces. Playfair Display + Mona Sans + Host Grotesk become the
+   primaries; the Google Fonts import above stays as a fallback chain so the
+   page never reads broken if a local file fails to load. */
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('./fonts/PlayfairDisplay-Regular.woff2') format('woff2'),
+       url('./fonts/PlayfairDisplay-Regular.woff')  format('woff');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Mona Sans';
+  src: url('./fonts/MonaSans-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900; font-stretch: 75% 125%;
+  font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Host Grotesk';
+  src: url('./fonts/HostGrotesk-Light.woff2') format('woff2');
+  font-weight: 300; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Host Grotesk';
+  src: url('./fonts/HostGrotesk-Regular.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Host Grotesk';
+  src: url('./fonts/HostGrotesk-SemiBold.woff2') format('woff2');
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+
+/* Lucide icons (when needed): load on the page that uses them
+   <script src="https://unpkg.com/lucide@latest"></script>
+   <script>lucide.createIcons()</script> */
+
+:root {
+  /* ---- COLOUR — INK (deep neutral spine) -------------------------- */
+  /* Tightened post-Shader.se direction: deeper, cooler, less brown */
+  --ink-0: #050505;   /* page background — the void */
+  --ink-1: #0A0A0A;   /* surface */
+  --ink-2: #111111;   /* surface 2 */
+  --ink-3: #1A1A1A;   /* hover surface */
+  --line:  rgba(245, 245, 245, 0.08);  /* hairline @ alpha */
+
+  /* ---- COLOUR — BONE (light side, now neutral grey) ---------------- */
+  --bone-0: #F5F5F5;  /* primary text on dark */
+  --bone-1: #D9D9D9;  /* secondary text */
+  --bone-2: #8A8A8A;  /* tertiary, captions, meta (per spec) */
+  --bone-3: #5C5C5C;  /* deepest mute */
+
+  /* ---- COLOUR — SIGNAL & STATUS ----------------------------------- */
+  --signal: #C7F23E;  /* the lamp — one element per fold */
+  --signal-soft: rgba(199, 242, 62, 0.16);
+  --seal:   #A8231A;  /* BLOCKED · sovereign-only */
+  --lane:   #3A6EA5;  /* ROUTED · in-transit */
+  --warn:   #E4A23A;  /* WATCH */
+
+  /* ---- COLOUR — SEMANTIC ALIASES ---------------------------------- */
+  --bg:    var(--ink-0);
+  --bg-alt: var(--ink-1);
+  --fg:    var(--bone-0);
+  --fg-mid: var(--bone-1);
+  --fg-low: var(--bone-2);
+  --rule:  var(--ink-2);
+  --accent: var(--signal);
+
+  /* Light surface inversions (use on bone-0 page) */
+  --rule-on-light: rgba(5, 5, 5, 0.12);
+  --shadow-on-light: 0 1px 0 rgba(5, 5, 5, 0.06);
+
+  /* ---- TYPE FAMILIES --------------------------------------------- */
+  /* Playfair Display (OFL, local) primary → Newsreader (Google fallback) → serif */
+  --font-display: 'Playfair Display', 'Newsreader', 'Times New Roman', serif;
+  /* Mona Sans (OFL variable, local) primary → Inter Tight (Google fallback) → system */
+  --font-sans:    'Mona Sans', 'Inter Tight', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  /* Host Grotesk (OFL, local) — available via direct font-family for UI labels */
+  --font-ui:      'Host Grotesk', 'Mona Sans', 'Inter Tight', sans-serif;
+  /* Anton / Big Shoulders Display (OFL via Google) — condensed-black display slot
+     (the OFL stand-in for PPFormula-CondensedBlack; available for kicker headlines) */
+  --font-display-heavy: 'Anton', 'Big Shoulders Display', 'Impact', 'Arial Black', sans-serif;
+  /* IBM Plex Mono (OFL via Google) — editorial mono with more letterform character
+     than JetBrains; substitutes Fraktion Mono. Wired into the YAML editor below. */
+  --font-mono-edit:     'IBM Plex Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', 'Menlo', monospace;
+
+  /* ---- TYPE SCALE (px @ 1440 ref width) -------------------------- */
+  --t-12: 12px;   /* mono labels, micro */
+  --t-13: 13px;   /* tag, kicker */
+  --t-14: 14px;   /* meta */
+  --t-15: 15px;   /* body */
+  --t-16: 16px;   /* body alt */
+  --t-18: 18px;   /* large body */
+  --t-22: 22px;   /* H6 / lede */
+  --t-28: 28px;   /* H5 */
+  --t-36: 36px;   /* H4 */
+  --t-48: 48px;   /* H3 */
+  --t-64: 64px;   /* H2 / display body */
+  --t-96: 96px;   /* H1 */
+  --t-144: 144px; /* hero */
+  --t-208: 208px; /* monumental */
+
+  /* ---- TRACKING -------------------------------------------------- */
+  --track-display: -0.03em;
+  --track-display-huge: -0.04em;
+  --track-tight: -0.015em;
+  --track-normal: 0;
+  --track-caps: 0.18em;
+  --track-caps-tight: 0.10em;
+
+  /* ---- LINE HEIGHTS ---------------------------------------------- */
+  --lh-display: 0.92;
+  --lh-headline: 1.04;
+  --lh-tight: 1.2;
+  --lh-body: 1.5;
+  --lh-loose: 1.7;
+
+  /* ---- SPACING --------------------------------------------------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
+  --sp-10: 128px;
+  --sp-11: 192px;
+  --sp-12: 256px;
+
+  /* ---- LAYOUT ---------------------------------------------------- */
+  --page-max: 1440px;
+  --gutter-x: 64px;
+  --rail-h-top: 32px;     /* timecode + status rail */
+  --rail-h-main: 64px;    /* nav row */
+  --rail-h-ticker: 28px;  /* running ticker */
+
+  /* ---- BORDERS / RADII ------------------------------------------- */
+  --hairline: 1px solid var(--line);
+  --hairline-light: 1px solid var(--rule-on-light);
+  --hairline-signal: 1px solid var(--signal);
+  --r-0: 0;
+  --r-1: 2px;     /* tags */
+  --r-pill: 999px;
+
+  /* ---- MOTION ---------------------------------------------------- */
+  --ease: cubic-bezier(.2, .7, .2, 1);   /* TSM release curve */
+  --ease-in: cubic-bezier(.5, 0, .9, .3);
+  --d-press: 120ms;
+  --d-hover: 220ms;
+  --d-state: 420ms;
+  --d-entrance: 880ms;
+  --d-marquee: 24s;
+  --d-loop: 60s;
+}
+
+/* =====================================================================
+   RESET (minimal — preserves browser defaults that are useful)
+   ===================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--t-15);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+img, svg, video, canvas { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+::selection { background: var(--signal); color: var(--ink-0); }
+
+/* =====================================================================
+   SEMANTIC TYPE CLASSES
+   ===================================================================== */
+
+/* DISPLAY (Instrument Serif — sovereign declarations) */
+.t-hero {
+  font-family: var(--font-display);
+  font-size: clamp(72px, 12vw, var(--t-208));
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display-huge);
+  font-weight: 400;
+  text-wrap: balance;
+}
+.t-display-1 {
+  font-family: var(--font-display);
+  font-size: clamp(56px, 8vw, var(--t-144));
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display);
+  font-weight: 400;
+  text-wrap: balance;
+}
+.t-display-2 {
+  font-family: var(--font-display);
+  font-size: clamp(40px, 6vw, var(--t-96));
+  line-height: var(--lh-headline);
+  letter-spacing: var(--track-display);
+  font-weight: 400;
+  text-wrap: balance;
+}
+.t-italic { font-style: italic; }
+
+/* HEADLINES (Space Grotesk — editorial / UI) */
+.t-h1 {
+  font-family: var(--font-sans);
+  font-size: var(--t-64);
+  line-height: var(--lh-headline);
+  letter-spacing: var(--track-tight);
+  font-weight: 500;
+}
+.t-h2 {
+  font-family: var(--font-sans);
+  font-size: var(--t-48);
+  line-height: var(--lh-headline);
+  letter-spacing: var(--track-tight);
+  font-weight: 500;
+}
+.t-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--t-36);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  font-weight: 500;
+}
+.t-h4 {
+  font-family: var(--font-sans);
+  font-size: var(--t-28);
+  line-height: var(--lh-tight);
+  font-weight: 500;
+}
+.t-h5 {
+  font-family: var(--font-sans);
+  font-size: var(--t-22);
+  line-height: var(--lh-tight);
+  font-weight: 500;
+}
+.t-h6 {
+  font-family: var(--font-sans);
+  font-size: var(--t-18);
+  line-height: var(--lh-tight);
+  font-weight: 500;
+}
+
+/* BODY */
+.t-lede {
+  font-family: var(--font-sans);
+  font-size: var(--t-22);
+  line-height: var(--lh-tight);
+  color: var(--fg-mid);
+  font-weight: 400;
+  text-wrap: pretty;
+}
+.t-body {
+  font-family: var(--font-sans);
+  font-size: var(--t-16);
+  line-height: var(--lh-body);
+  font-weight: 400;
+}
+.t-body-sm {
+  font-family: var(--font-sans);
+  font-size: var(--t-14);
+  line-height: var(--lh-body);
+  font-weight: 400;
+}
+
+/* MONO (labels, metadata) */
+.t-mono {
+  font-family: var(--font-mono);
+  font-size: var(--t-13);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-normal);
+  font-weight: 400;
+}
+.t-mono-sm {
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+  line-height: var(--lh-tight);
+  font-weight: 400;
+}
+.t-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--fg-low);
+}
+.t-label {
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+  line-height: 1;
+  letter-spacing: var(--track-caps-tight);
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* COLOURED HELPERS */
+.c-signal { color: var(--signal); }
+.c-seal { color: var(--seal); }
+.c-lane { color: var(--lane); }
+.c-low { color: var(--fg-low); }
+.c-mid { color: var(--fg-mid); }
+.bg-ink { background: var(--ink-0); color: var(--bone-0); }
+.bg-bone { background: var(--bone-0); color: var(--ink-0); }
+
+/* =====================================================================
+   ATOMS — buttons, pips, tags, rules
+   ===================================================================== */
+.btn {
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+  letter-spacing: var(--track-caps-tight);
+  text-transform: uppercase;
+  padding: 14px 22px 13px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: var(--bone-0);
+  cursor: pointer;
+  transition: background var(--d-hover) var(--ease),
+              color var(--d-hover) var(--ease),
+              transform var(--d-press) var(--ease);
+  display: inline-flex; align-items: center; gap: 12px;
+}
+.btn:hover { background: var(--bone-0); color: var(--ink-0); }
+.btn:active { transform: scale(0.98); }
+.btn--signal { color: var(--signal); border-color: var(--signal); }
+.btn--signal:hover { background: var(--signal); color: var(--ink-0); }
+.btn--solid { background: var(--bone-0); color: var(--ink-0); }
+.btn--solid:hover { background: var(--signal); }
+
+.pip {
+  display: inline-block;
+  width: 6px; height: 6px;
+  background: var(--fg-low);
+  vertical-align: middle;
+}
+.pip--live { background: var(--signal); box-shadow: 0 0 0 2px var(--signal-soft); }
+.pip--blocked { background: var(--seal); }
+.pip--routed { background: var(--lane); }
+.pip--idle { background: var(--fg-low); }
+
+.tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 10px 4px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+  letter-spacing: var(--track-caps-tight);
+  text-transform: uppercase;
+  color: var(--fg-mid);
+}
+
+hr.rule { border: 0; border-top: var(--hairline); margin: 0; }
+
+/* Live underline link */
+.link {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 2px;
+}
+.link::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 1px; background: currentColor;
+  transform: scaleX(1); transform-origin: left;
+  transition: transform var(--d-hover) var(--ease);
+}
+.link:hover::after { transform: scaleX(0); transform-origin: right; }
+
+/* =====================================================================
+   UTIL — grid + frame
+   ===================================================================== */
+.page {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 0 var(--gutter-x);
+}
+.grid-12 {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 24px;
+}
+
+/* Corner stamps — used on cards */
+.stamp-tl, .stamp-tr, .stamp-bl, .stamp-br {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+  letter-spacing: var(--track-caps-tight);
+  text-transform: uppercase;
+  color: var(--fg-low);
+}
+.stamp-tl { top: 16px; left: 16px; }
+.stamp-tr { top: 16px; right: 16px; }
+.stamp-bl { bottom: 16px; left: 16px; }
+.stamp-br { bottom: 16px; right: 16px; }
+
+/* Grain overlay (use sparingly) */
+.grain::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/></svg>");
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+}
