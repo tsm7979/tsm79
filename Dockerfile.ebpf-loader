@@ -1,0 +1,37 @@
+# TSM eBPF/XDP loader — Layer 1 "network authority".
+#
+# Builds the kernel XDP/TC programs (clang→BPF) and the libbpf userspace loader,
+# then at runtime attaches XDP at the NIC, pins the maps at /sys/fs/bpf/tsm, and
+# syncs threat-intel's Redis `tsm:xdp:blocklist` HASH into the kernel `ip_blocked`
+# map so feed entries become XDP_DROP at the driver.
+#
+# NOTE: XDP attach to a real NIC requires a Linux host with CAP_NET_ADMIN/CAP_BPF
+# (run privileged). On Docker Desktop / WSL the container only sees its veth, so
+# attach is best-effort there; the production deploy is deploy/kubernetes/base/
+# ebpf-daemonset.yaml (host network, one loader per node).
+FROM ubuntu:24.04
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        clang llvm libelf-dev libbpf-dev gcc-multilib libhiredis-dev \
+        make ca-certificates iproute2 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY ebpf/          ./ebpf/
+COPY ebpf-loader-c/ ./ebpf-loader-c/
+
+# Compile the eBPF object (with BTF via -g) + the libbpf loader.
+RUN cd ebpf-loader-c && make \
+    && install -D tsm_loader /usr/local/bin/tsm_loader \
+    && install -D tsm_xdp.o  /opt/tsm/tsm_xdp.o
+
+ENV TSM_XDP_IFACE=eth0
+# TSM_REDIS_HOST / TSM_REDIS_PORT / TSM_REDIS_PASSWORD are supplied by compose.
+
+# Entry wrapper: ensure bpffs is mounted (privileged) so maps can be pinned,
+# then exec the loader.
+RUN printf '#!/bin/sh\nmountpoint -q /sys/fs/bpf || mount -t bpf bpf /sys/fs/bpf 2>/dev/null || true\nexec /usr/local/bin/tsm_loader "$@"\n' \
+        > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["--iface", "eth0", "--obj", "/opt/tsm/tsm_xdp.o", "--pin", "/sys/fs/bpf/tsm", "--skb-mode"]

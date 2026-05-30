@@ -46,6 +46,12 @@ fi
 info "Installing tsm-firewall..."
 "$PYTHON" -m pip install tsm-firewall --quiet
 
+# Download spaCy NER model for prose PII detection (names, orgs, locations)
+info "Downloading spaCy NER model (en_core_web_sm)..."
+"$PYTHON" -m spacy download en_core_web_sm --quiet 2>/dev/null \
+  && ok "spaCy en_core_web_sm ready" \
+  || warn "spaCy model not installed — NER detection will be skipped"
+
 # Verify
 if command -v tsm &>/dev/null; then
     ok "tsm installed at $(command -v tsm)"

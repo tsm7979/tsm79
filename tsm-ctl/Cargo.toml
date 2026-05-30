@@ -1,0 +1,30 @@
+[package]
+name = "tsm-ctl"
+version = "1.0.0"
+edition = "2021"
+description = "TSM — The Sovereign Mechanica CLI"
+authors = ["TSM Engineering"]
+
+[[bin]]
+name = "tsm-ctl"
+path = "src/main.rs"
+
+[dependencies]
+# Argument parsing
+clap = { version = "4", features = ["derive", "env"] }
+
+# HTTP client (no tokio — synchronous)
+ureq = { version = "2", features = ["json"] }
+
+# JSON
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Table formatting
+comfy-table = "7"
+
+# Terminal colors
+colored = "2"
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }

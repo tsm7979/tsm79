@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: tsm
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - dataplane.yaml
+  - detector.yaml
+  - control-plane.yaml
+  - threat-intel.yaml
+  - ebpf-daemonset.yaml
+  - clickhouse.yaml
+  - network-policy.yaml
+  - cilium-l7-policy.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of:    tsm

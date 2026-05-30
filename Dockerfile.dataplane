@@ -1,0 +1,111 @@
+# TSMv2 — Sovereign AI Data Plane
+# Multi-stage build: compile Rust binary → minimal runtime image
+#
+# Stage 1: builder
+#   - Uses the official Rust toolchain on Debian Bookworm Slim
+#   - Caches Cargo registry and compiled deps separately from source
+#   - Produces a statically linked binary (musl target)
+#   - Creates /var/log/tsm with correct ownership (uid 65532 = distroless nonroot)
+#
+# Stage 2: runtime
+#   - Distroless (no shell, no package manager, minimal attack surface)
+#   - Only the binary + audit log directory
+#   - HEALTHCHECK uses the binary's own --health-check subcommand (no wget needed)
+
+# ── Stage 1: Build ────────────────────────────────────────────────────────────
+
+# Pin to rust:slim-bookworm (tracks latest stable; use a digest in prod for reproducibility).
+# Using slim to reduce builder layer size vs the full toolchain image.
+FROM rust:slim-bookworm AS builder
+
+WORKDIR /build
+
+# Install musl tools for static linking + file for binary verification
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        musl-tools \
+        ca-certificates \
+        file \
+        protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup target add x86_64-unknown-linux-musl
+
+# ── Dependency cache layer ────────────────────────────────────────────────────
+# Copy only manifest files first so Docker caches deps independently of source.
+COPY dataplane/Cargo.toml dataplane/Cargo.lock* ./dataplane/
+
+# Create a dummy main.rs to satisfy cargo
+RUN mkdir -p dataplane/src && echo 'fn main(){}' > dataplane/src/main.rs
+
+WORKDIR /build/dataplane
+
+# Download + compile dependencies (cached unless Cargo.toml changes)
+RUN cargo build --release --target x86_64-unknown-linux-musl 2>&1 | tail -5 || true
+
+# ── Full source build ─────────────────────────────────────────────────────────
+WORKDIR /build
+
+# Copy full source
+COPY dataplane/ ./dataplane/
+
+# main.rs includes the ClickHouse ingestor via #[path = "../../observability/clickhouse/ingestor.rs"],
+# so the observability tree must sit alongside dataplane/ in the build context.
+COPY observability/ ./observability/
+
+# proto/ is read by build.rs (tonic-build) when compiling with --features grpc.
+COPY proto/ ./proto/
+
+WORKDIR /build/dataplane
+
+# Force rebuild of our crate with the typed gRPC detector client (dep cache still valid).
+RUN touch src/main.rs && \
+    cargo build --release --target x86_64-unknown-linux-musl --features grpc
+
+# Verify the binary has no glibc deps. Modern Rust musl builds emit a static-PIE
+# binary, which `file` reports as "static-pie linked" (not "statically linked");
+# both forms are fully static, so accept either.
+RUN file target/x86_64-unknown-linux-musl/release/tsm-dataplane | grep -qE "statically linked|static-pie linked" && \
+    ls -lh target/x86_64-unknown-linux-musl/release/tsm-dataplane
+
+# Create the audit log directory here in the builder (distroless has no shell/mkdir).
+# uid/gid 65532 is the nonroot user in gcr.io/distroless/static-debian12:nonroot.
+RUN mkdir -p /var/log/tsm && chown 65532:65532 /var/log/tsm
+
+# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
+
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+
+LABEL org.opencontainers.image.title="TSMv2 Data Plane"
+LABEL org.opencontainers.image.description="Sovereign AI firewall — single Rust binary"
+LABEL org.opencontainers.image.version="2.0.0"
+
+# Copy the statically linked binary
+COPY --from=builder \
+    /build/dataplane/target/x86_64-unknown-linux-musl/release/tsm-dataplane \
+    /usr/local/bin/tsm-dataplane
+
+# Copy the pre-created audit log directory (owned by nonroot uid 65532)
+COPY --from=builder --chown=65532:65532 /var/log/tsm /var/log/tsm
+
+# ── Environment defaults ──────────────────────────────────────────────────────
+# All can be overridden at runtime via docker-compose environment or K8s secrets.
+
+ENV TSM_LISTEN="0.0.0.0:8080" \
+    TSM_DETECTOR_URL="http://detector:8001" \
+    TSM_DETECTOR_TIMEOUT_MS="5000" \
+    TSM_AUDIT_LOG="/var/log/tsm/audit.log" \
+    TSM_AUDIT_SECRET="change-me-in-production" \
+    TSM_POOL_MAX_IDLE="8" \
+    TSM_DETECTOR_FAILURE_MODE="allow" \
+    TSM_RATE_LIMIT="100" \
+    TSM_LOG_LEVEL="info"
+
+EXPOSE 8080
+
+# --health-check is handled by main() before any server startup —
+# it connects to the running instance at 127.0.0.1:8080 and exits 0/1.
+# No wget or shell required (distroless compatible).
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+    CMD ["/usr/local/bin/tsm-dataplane", "--health-check"]
+
+ENTRYPOINT ["/usr/local/bin/tsm-dataplane"]

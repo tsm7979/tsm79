@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tsm-config
+  namespace: tsm
+data:
+  # Dataplane (Rust)
+  TSM_LISTEN_ADDR:          "0.0.0.0:8080"
+  TSM_DETECTOR_URL:         "http://detector-svc:8001"
+  TSM_CONTROL_PLANE_URL:    "http://control-plane-svc:9090"
+  TSM_AUDIT_LOG:            "/data/audit/audit.jsonl"
+  TSM_POOL_MAX_IDLE:        "8"
+  TSM_RATE_LIMIT:           "100"
+  TSM_LOG_LEVEL:            "info"
+  TSM_DETECTOR_TIMEOUT_MS:  "500"
+  TSM_DETECTOR_FAILURE_MODE: "allow"
+
+  # Proxy (Go)
+  TSM_GO_PORT:              "8090"
+  TSM_GO_DETECTOR_URL:      "http://detector-svc:8001"
+
+  # Control Plane (Go)
+  TSM_CP_PORT:              "9090"
+  TSM_CP_HEALTH_INTERVAL:   "10s"
+  TSM_CP_LOG_LEVEL:         "info"
+
+  # Detector (Python)
+  DETECTOR_PORT:            "8001"
+  LOG_LEVEL:                "warning"

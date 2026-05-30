@@ -1,0 +1,160 @@
+---
+# ClickHouse StatefulSet — stores AI request telemetry ingested by the
+# Rust dataplane via the observability/clickhouse/ingestor.rs module.
+# Schema defined in observability/clickhouse/schema.sql.
+#
+# Single-shard deployment suitable for up to ~500K events/day on a 2-core node.
+# For larger deployments: switch to ClickHouse Keeper + distributed tables.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse
+  namespace: tsm
+  labels:
+    app: clickhouse
+    app.kubernetes.io/component: analytics
+spec:
+  serviceName: clickhouse-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:24.3-alpine
+          ports:
+            - name: http
+              containerPort: 8123
+            - name: native
+              containerPort: 9000
+          env:
+            - name: CLICKHOUSE_DB
+              value: tsm
+            - name: CLICKHOUSE_USER
+              value: tsm
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tsm-secrets
+                  key: clickhouse-password
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: config
+              mountPath: /etc/clickhouse-server/config.d/tsm.xml
+              subPath: tsm.xml
+              readOnly: true
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d/schema.sql
+              subPath: schema.sql
+              readOnly: true
+          resources:
+            requests:
+              cpu:    "250m"
+              memory: "512Mi"
+            limits:
+              cpu:    "2000m"
+              memory: "4Gi"
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: clickhouse-config
+        - name: init-sql
+          configMap:
+            name: clickhouse-schema
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-headless
+  namespace: tsm
+  labels:
+    app: clickhouse
+spec:
+  clusterIP: None
+  selector:
+    app: clickhouse
+  ports:
+    - name: http
+      port: 8123
+    - name: native
+      port: 9000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-svc
+  namespace: tsm
+  labels:
+    app: clickhouse
+spec:
+  selector:
+    app: clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: 8123
+    - name: native
+      port: 9000
+      targetPort: 9000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-config
+  namespace: tsm
+data:
+  tsm.xml: |
+    <clickhouse>
+      <logger>
+        <level>warning</level>
+        <console>1</console>
+      </logger>
+      <listen_host>0.0.0.0</listen_host>
+      <max_connections>100</max_connections>
+      <max_concurrent_queries>50</max_concurrent_queries>
+      <uncompressed_cache_size>8589934592</uncompressed_cache_size>
+      <mark_cache_size>5368709120</mark_cache_size>
+    </clickhouse>
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-schema
+  namespace: tsm
+data:
+  schema.sql: |
+    -- Loaded from observability/clickhouse/schema.sql at deploy time.
+    -- Override this ConfigMap with the full schema if you add columns.
+    CREATE DATABASE IF NOT EXISTS tsm;
+    -- The full schema is in observability/clickhouse/schema.sql
+    -- Apply manually: clickhouse-client --query "$(cat observability/clickhouse/schema.sql)"

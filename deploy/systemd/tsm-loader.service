@@ -1,0 +1,37 @@
+[Unit]
+Description=TSM eBPF XDP Program Loader
+Documentation=https://github.com/tsm79/tsm79
+After=network-online.target
+Before=tsm-dataplane.service
+Wants=network-online.target
+PartOf=tsm.target
+
+[Service]
+Type=simple
+# Must run as root for CAP_NET_ADMIN + CAP_BPF
+User=root
+
+ExecStart=/usr/local/sbin/tsm_loader \
+    --iface ${TSM_XDP_IFACE:-eth0} \
+    --obj /usr/local/lib/tsm/tsm_xdp.o \
+    --cidrs /etc/tsm/ai_cidrs.txt \
+    --control /run/tsm/loader.sock \
+    --pin /sys/fs/bpf/tsm
+
+ExecReload=/bin/sh -c 'echo RELOAD | socat - UNIX-SENDTO:/run/tsm/loader.sock'
+
+EnvironmentFile=-/etc/tsm/loader.env
+
+Restart=on-failure
+RestartSec=5s
+
+# Keep BPF maps alive across loader restarts (pinned in /sys/fs/bpf/tsm)
+RemainAfterExit=no
+
+RuntimeDirectory=tsm
+RuntimeDirectoryMode=0755
+
+TimeoutStopSec=10s
+
+[Install]
+WantedBy=multi-user.target tsm.target

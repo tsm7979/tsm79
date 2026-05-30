@@ -126,7 +126,7 @@ def compute(path: pathlib.Path = _LEDGER_PATH) -> Dict[str, Any]:
             except Exception:
                 pass
 
-    peak_hour = min(hourly, key=lambda h: (hourly[h], -h)) if hourly else None
+    peak_hour = max(hourly, key=lambda h: (hourly[h], -h)) if hourly else None
 
     return {
         "total": total,

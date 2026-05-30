@@ -50,3 +50,62 @@ Thumbs.db
 *.db
 *.sqlite
 logs/
+
+# ─── Node.js ──────────────────────────────────────────────
+node_modules/
+proxy/dist/
+dashboard/.next/
+dashboard/out/
+*.tsbuildinfo
+
+# ─── Rust ─────────────────────────────────────────────────
+dataplane/target/
+ebpf-loader/target/
+*.rlib
+
+# ─── Python test / coverage artifacts ─────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+tests/.tmp_workspaces/
+tests/.tmp_policy.json
+
+# ─── Generated protobuf stubs (produced by grpcio-tools) ──
+detector/gen/
+
+# ─── Model checkpoints (runtime — not source) ─────────────
+models/
+*.pkl
+*.onnx
+*.pt
+*.bin
+
+# ─── Build artifacts: polyglot layer ──────────────────────
+# Java (Maven/Gradle target dirs + compiled classes)
+**/target/
+*.class
+*.jar
+*.war
+# C# / .NET (build + intermediate)
+**/bin/
+**/obj/
+*.dll
+*.pdb
+# Go compiled binaries
+overlay-node/overlay-node
+*.exe
+
+# ─── Landing artifacts (Vite + Playwright caps + DCC previews) ─
+landing/dist/
+landing/caps/
+landing/blender/*.png
+landing/blender/*.glb
+
+# ─── Local infra cache ────────────────────────────────────
+.cloudflared/cache/
+
+# ─── Editor / backup tmp ──────────────────────────────────
+*.bak
+*.orig
+*.tmp

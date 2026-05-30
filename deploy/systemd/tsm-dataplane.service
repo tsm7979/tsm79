@@ -1,0 +1,71 @@
+[Unit]
+Description=TSM Sovereign AI Data Plane (Rust)
+Documentation=https://github.com/tsm79/tsm79
+After=network-online.target postgresql.service tsm-loader.service
+Wants=network-online.target
+PartOf=tsm.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+
+# Run as dedicated service account (created by install script)
+User=tsm
+Group=tsm
+
+# Binary and working directory
+ExecStart=/usr/local/bin/tsm-dataplane
+WorkingDirectory=/var/lib/tsm/dataplane
+
+# Secrets injected from /etc/tsm/dataplane.env (populated by secrets-bootstrap.sh)
+EnvironmentFile=/etc/tsm/dataplane.env
+
+# Core settings (non-secret; safe to embed here)
+Environment=TSM_LISTEN=0.0.0.0:8080
+Environment=TSM_DETECTOR_URL=http://127.0.0.1:8001
+Environment=TSM_POOL_MAX_IDLE=16
+Environment=TSM_RATE_LIMIT=500
+Environment=TSM_DETECTOR_FAILURE_MODE=allow
+Environment=TSM_LOG_LEVEL=info
+
+# Restart policy: restart on failure, not on intentional stop
+Restart=on-failure
+RestartSec=3s
+StartLimitIntervalSec=120s
+StartLimitBurst=5
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallFilter=~@debug @mount @privileged @reboot @raw-io @cpu-emulation @obsolete
+
+# Capabilities: bind to port 8080 (CAP_NET_BIND_SERVICE if < 1024)
+AmbientCapabilities=
+CapabilityBoundingSet=
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=2048
+MemoryMax=2G
+CPUWeight=80
+
+# Graceful shutdown: SIGTERM, wait 30s, then SIGKILL
+TimeoutStopSec=30s
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Audit log directory (writable by tsm user)
+ReadWritePaths=/var/log/tsm /var/lib/tsm/dataplane
+
+[Install]
+WantedBy=multi-user.target tsm.target

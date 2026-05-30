@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none">
+  
+  <rect x="0.5" y="0.5" width="79" height="79" stroke="currentColor" stroke-width="1"></rect>
+  <text x="40" y="50" text-anchor="middle" font-family="Instrument Serif, serif" font-size="36" letter-spacing="-1" font-weight="400" fill="currentColor">TSM</text>
+  <rect x="68" y="6" width="4" height="4" fill="#C7F23E"></rect>
+</svg>

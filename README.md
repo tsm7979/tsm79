@@ -1,177 +1,191 @@
-# 🛡️ TSM — The AI Firewall
+# TSM79 — Sovereign AI Control Plane
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)](https://python.org)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)](pyproject.toml)
+> **SOVEREIGN. CONTROL. GOVERN.**
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Website](https://img.shields.io/badge/website-thesovereignmechanica.ai-purple)](https://thesovereignmechanica.ai/)
+[![Live: thesovereignmechanica.ai](https://img.shields.io/badge/live-thesovereignmechanica.ai-c7f23e)](https://www.thesovereignmechanica.ai/)
+[![Dataplane: 237 tests](https://img.shields.io/badge/dataplane-237%20tests-c7f23e)](dataplane/)
 
-I built this because I kept accidentally pasting API keys and emails into AI chat windows.
+TSM79 is an inline AI control plane — a low-latency proxy that sits between your application and every model you use (public, private, sovereign). Every prompt is evaluated before it leaves the perimeter: PII is detected and redacted, secrets are blocked, the request is routed by policy, and the whole event is committed to a tamper-evident audit ledger. Prevention-first. By design.
 
-Once you see your own SSN show up in a Claude prompt, you realize the problem is real and nothing out there actually solves it cheaply. So this is that — a firewall that intercepts every AI call you make, strips the sensitive stuff, and lets you watch it happen in real time.
+Built by **The Sovereign Mechanica** (TSM Pvt Ltd) — the live marketing surface is at <https://www.thesovereignmechanica.ai/>.
 
 ---
 
-## Try it right now
+## What you get
+
+| Verdict | Behaviour | HTTP |
+|---|---|---|
+| `allow` | forwarded unchanged | upstream's |
+| `redact` | PII / secret spans stripped, forwarded sanitised | upstream's |
+| `route_local` | held inside your perimeter (Ollama / VPC / on-prem) | upstream's |
+| `quarantine` | held for human review — not forwarded, not denied | **202** |
+| `block` | refused at the gate, never sent upstream | **400** |
+
+Detection coverage on the local fast path:
+
+| Type | Method | Severity |
+|---|---|---|
+| OpenAI / Anthropic / GitHub / AWS / Stripe / HuggingFace / GitLab / SendGrid keys | Known prefix + min-length | critical |
+| Private keys, JWTs | Structural parse | critical |
+| SSN, credit cards | Regex + Luhn | high |
+| Email, phone, IPv4 | Regex + context negation | medium |
+| High-entropy payloads | Shannon (≥ 4.5 bits/char) | high |
+| Jailbreak / prompt-injection | Pattern + BPE token-splitting | critical — blocked |
+| Ambiguous PII (NER signal) | ONNX heuristic → gRPC escalation → quarantine | varies |
+
+When the fast path is uncertain, escalation goes to the Python detector over gRPC; the Rust core never leaves microsecond response times for the clean case.
+
+---
+
+## Run the enterprise stack
+
+The full stack (dataplane, detector, control-plane, threat-intel, admin-api, dashboard, observability) is one compose file:
 
 ```bash
-pip install tsm-firewall
-tsm enable
-```
-
-You'll see this fire immediately in your terminal — no second window, no curl, nothing extra:
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🛡️  TSM — The AI Firewall
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ✓  Firewall started at http://localhost:8080
-  ✓  PII detection active  (14 patterns, 4 severity tiers)
-  ✓  Audit log active
-
-  Sending test traffic — watch the firewall work:
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[TSM] → gpt-3.5-turbo  Help me file taxes. My SSN is 12…
-[TSM] 🚨 Detected: SSN
-[TSM] 🛡️  Redacted: SSN → [REDACTED:SSN]
-[TSM] 🔒 Routing → local model  cloud never sees it
-[TSM] ✓ Done  latency=2ms  cost=free (local)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[TSM] → gpt-4  Charge my Visa 4111 1111 1111 1111…
-[TSM] 🚨 Detected: CREDIT_CARD
-[TSM] 🔒 Routing → local model  cloud never sees it
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[TSM] → gpt-3.5-turbo  Email alice@company.com the report
-[TSM] 🔍 Detected: EMAIL
-[TSM] 🛡️  Redacted: EMAIL → [REDACTED:EMAIL]
-[TSM] ☁️  Routing → cloud  (PII removed)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[TSM] → gpt-3.5-turbo  What is the capital of France?
-[TSM] ✓ Done  clean — forwarded unchanged
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  ✓  Firewall active. Monitoring live requests...
-```
-
-That's it. From install to visible protection in under 30 seconds.
-
----
-
-## How it works
-
-TSM runs a local HTTP proxy on `:8080` that speaks the OpenAI API format. You point your tools at it instead of OpenAI. It scans every prompt before it leaves your machine, redacts what it finds, and makes a routing decision:
-
-- **CRITICAL PII** (SSN, credit card, private key) → routed to a local model. Cloud never touches it.
-- **HIGH PII** (API keys, passwords, JWT, AWS keys) → redacted, then forwarded to cloud.
-- **MEDIUM PII** (emails, phone numbers) → redacted, forwarded.
-- **Clean** → passes through unchanged.
-
-All of this happens in `~2ms` of overhead. You see every decision printed to your terminal in real time.
-
----
-
-## Hooking into your existing tools
-
-This is the part that matters most. You don't change your code.
-
-```bash
-# Wrap a specific tool
-tsm hook claude           # runs claude with TSM intercepting everything
-tsm hook codex            # same for codex
-
-# Or protect your entire shell session
-eval "$(tsm enable --eval)"
-# Now every python script, node app, or CLI tool that calls an AI is protected
-```
-
-If you use the OpenAI Python SDK:
-
-```python
-import os
-os.environ["OPENAI_BASE_URL"] = "http://localhost:8080"
-
-# Your existing code — completely unchanged
-from openai import OpenAI
-client = OpenAI()
-response = client.chat.completions.create(...)  # TSM intercepts this
-```
-
----
-
-## What gets caught
-
-Tested against 8/8 pattern types through a live proxy:
-
-| What                        | Severity | What TSM does                     |
-|-----------------------------|----------|-----------------------------------|
-| Social Security Number       | CRITICAL | Blocks from cloud entirely         |
-| Credit card number           | CRITICAL | Blocks from cloud entirely         |
-| Private key / PEM file       | CRITICAL | Blocks from cloud entirely         |
-| AWS access key               | HIGH     | Strips it, forwards the rest       |
-| OpenAI / API key             | HIGH     | Strips it, forwards the rest       |
-| Password in prompt           | HIGH     | Strips it, forwards the rest       |
-| Email address                | MEDIUM   | Strips it, forwards the rest       |
-| Phone number                 | MEDIUM   | Strips it, forwards the rest       |
-| Clean prompt                 | —        | Passes through, no overhead        |
-
-Every decision gets logged to `tsm_audit.jsonl` for compliance purposes.
-
----
-
-## Commands
-
-```
-tsm enable                    the main one — start + demo + live monitor
-tsm demo                      step through 5 request types interactively
-tsm scan "some text"          check text for PII without running the proxy
-tsm hook claude               wrap claude
-tsm hook codex                wrap codex
-tsm run python app.py         run any script through the firewall
-eval "$(tsm enable --eval)"   set env vars to protect your shell session
-tsm status                    see what's been intercepted so far
-tsm skills                    list behavior packs (claude, codex, secure-coding)
-tsm stop                      stop the proxy
-tsm test                      run the built-in detection test (8/8 checks)
-```
-
----
-
-## Skill packs
-
-These are small markdown files that change how TSM handles specific tools.
-
-```bash
-tsm start --skill secure-coding   # flags insecure patterns in AI completions
-tsm start --skill claude          # tweaked for claude sessions
-tsm start --skill codex           # tweaked for code completion workflows
-```
-
----
-
-## The honest pitch
-
-Companies charge $5k–$50k/year for products that do roughly what this does. Bedrock Guardrails, Nightfall, Private AI — they're all real products with real enterprise features (SOC 2, SSO, dashboards, Kubernetes). This repo isn't that.
-
-What this is: the core detection and routing engine, open source, running on your laptop, showing you exactly what those products are protecting against. If you're building AI into a product and you haven't thought about this yet, this is a good place to start.
-
-The enterprise version of TSM is [thesovereignmechanica.ai](https://thesovereignmechanica.ai/). The repo is the free tier.
-
----
-
-## Install
-
-```bash
-# from PyPI
-pip install tsm-firewall
-
-# or from source
 git clone https://github.com/tsm7979/tsm79.git
 cd tsm79
-pip install -e .
+cp .env.example .env       # fill in CLICKHOUSE_PASSWORD + provider keys
+docker compose -f docker-compose.enterprise.yml up -d
 ```
 
-No dependencies outside the Python standard library. Python 3.8+.
+You'll have:
+
+| Endpoint | Port | What it is |
+|---|---|---|
+| Dataplane HTTP | `:8080` | OpenAI-compatible proxy — point your SDK base_url here |
+| Dataplane `/metrics` | `:8080/metrics` | Prometheus exposition (latency, verdicts, tokens-per-provider) |
+| Dataplane `/_tsm/resolve/<name>` | `:8080` | Sovereign-overlay name resolution |
+| Detector gRPC | `:50051` | Python ML detector (NER + classifier escalation) |
+| Admin API | `:8088` | Spring Boot control plane (workspace/policy/key mgmt) |
+| Dashboard | `:3000` | Next.js operator UI |
+| Postgres | `:5432` | Audit ledger + Merkle chain |
+| ClickHouse | `:8123` | Analytics ingest (`tsm.ai_requests` rows) |
+| Redis | `:6379` | Rate limit + session pinning |
+
+Point your existing OpenAI SDK at the dataplane and stop touching application code:
+
+```bash
+export OPENAI_BASE_URL=http://localhost:8080
+python your_existing_app.py
+```
 
 ---
 
-MIT · [thesovereignmechanica.ai](https://thesovereignmechanica.ai/) · [github.com/tsm7979/tsm79](https://github.com/tsm7979/tsm79)
+## Architecture — best language per layer
+
+Each layer in the language that earns its place. Nothing is monolithic, nothing is Python by default.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Client SDK / curl / dashboard                                       │
+└─────────────────────┬────────────────────────────────────────────────┘
+                      │ OpenAI-compatible HTTP/1.1 (+ SSE)
+                      ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  dataplane/ — Rust (the inline AI firewall)                          │
+│    • h1 / h2 / hpack parsers, TLS + mTLS, conn pool, rate limit      │
+│    • detect: regex set + Aho-Corasick prefilter + BPE structural     │
+│              + entropy + ONNX heuristic + NER trigger                │
+│    • policy: rule engine + builtin rules (incl. quarantine)          │
+│    • overlay: self-certifying .tsm names + gateway                   │
+│    • audit: Merkle chain → Postgres                                  │
+│    • observability: ClickHouse JSONEachRow + Prometheus              │
+└────┬──────────────────┬───────────────────┬───────────────┬──────────┘
+     │ gRPC             │ HTTP              │ Postgres      │ ClickHouse
+     ▼                  ▼                   ▼               ▼
+┌──────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+│ detector │   │ control-plane│   │   audit      │   │ analytics    │
+│ Python   │   │ Go           │   │  ledger      │   │  events      │
+│ (ML +    │   │ (config /    │   │              │   │              │
+│  NER)    │   │  threat-intel│   │              │   │              │
+└──────────┘   └──────────────┘   └──────────────┘   └──────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│  Companions, each in its right language                              │
+├──────────────────────────────────────────────────────────────────────┤
+│  admin-api/      Java (Spring Boot) — workspace / policy / key REST  │
+│  policy-lsp/     C# (.NET LSP)      — policy YAML diagnostics in IDE │
+│  edge/           C++ (wasmtime)     — sandboxed Wasm edge workers    │
+│  overlay-node/   Go (libp2p)        — sovereign-overlay Kademlia DHT │
+│  ebpf-loader/    Rust + C variants  — XDP/TC kernel packet authority │
+│  dashboard/      TypeScript (Next)  — operator UI                    │
+│  landing-v5/     static (WebGPU)    — public marketing — LIVE        │
+│  extension/      MV3 (TypeScript)   — browser front-door for .tsm    │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+The dataplane is the only component on the request hot path. Everything else is async, optional, or operator-facing.
+
+---
+
+## The sovereign overlay (`.tsm`)
+
+An ICANN-free namespace that rides on top of the existing internet — Tor/IPFS-class, opt-in, governed by the same TSM dataplane firewall.
+
+- **Names are Ed25519 keypairs.** A `.tsm` name is bound to a public key by a signed `NameRecord`; the holder of the private key owns the binding. Anyone can verify offline. Forged signatures, hijack attempts (rebinding to a different key), and stale-sequence replays are rejected at the resolver.
+- **Resolved through `/_tsm/resolve/<name>`** on the dataplane. Self-certifying addresses derived as `<base32(pubkey)>.tsm` — the Tor v3 `.onion` model.
+- **Loaded through `/_tsm/<name>`** — the gateway fetches the resolved endpoint AND runs the content through `Detector::scan` before serving it. Malicious overlay content is blocked at the door, the same way it is on the AI request path. The firewall governs the new network space for free.
+- **DHT propagation** via the Go `overlay-node/` (libp2p Kademlia under a dedicated `/tsm` protocol prefix — isolated from the public IPFS DHT). The Rust and Go sides share byte-compatible signing bytes, so cross-implementation propagation is verifiable.
+- **Front-door**: the MV3 browser extension in `extension/` lets the user type `tsm hub` in the address bar and reach the gateway with no DNS leak.
+
+See `dataplane/src/overlay/`, `overlay-node/`, `extension/`.
+
+---
+
+## Repository layout
+
+```
+.
+├── dataplane/         Rust — the inline AI firewall (237 tests)
+├── detector/          Python — ML detector (gRPC + HTTP), NER escalation
+├── control-plane/     Go — config + workspace + key store
+├── threat-intel/      Go — IP reputation feeds
+├── admin-api/         Java (Spring Boot) — operator REST
+├── policy-lsp/        C# (.NET) — policy DSL language server
+├── edge/              C++ (wasmtime) — Wasm worker host
+├── overlay-node/      Go (libp2p) — sovereign overlay DHT node
+├── ebpf-loader/       Rust — XDP/TC loader (Aya variant)
+├── ebpf-loader-c/     C — XDP/TC loader (libbpf variant, default in CI)
+├── ebpf/              eBPF/XDP C — packet-authority programs
+├── dashboard/         TypeScript (Next.js) — operator UI
+├── landing/           TypeScript (Vite) — older landing iteration
+├── landing-v4/        static — brand-correct sovereign landing kit
+├── landing-v5/        static — cinematic upgrade (LIVE)
+├── extension/         MV3 — browser front-door for the .tsm overlay
+├── proto/             Protobufs (dataplane↔detector gRPC)
+├── observability/     ClickHouse schema + Rust ingestor
+├── deploy/            Postgres migrations, nginx confs
+├── tests/             Cross-component end-to-end tests
+└── docker-compose.enterprise.yml
+```
+
+---
+
+## Detection — anything past the regex set
+
+The fast path stays microsecond. When it's uncertain, two escalation hops:
+
+1. **In-Rust ONNX heuristic** (`dataplane/src/detect/onnx_engine.rs`) — secret/jailbreak/PII-leak labels with confidence. If confident enough to act (≥ 0.85) or low enough to dismiss (< 0.70 and `Clean`), decided locally.
+2. **Python detector over gRPC** (`detector/grpc_server.py`) — NER + classifier for content the Rust ONNX path is genuinely unsure about. The 0.70–0.85 dead zone is preserved as `Ambiguous` rather than silently waved through — fail-secure.
+3. **Quarantine** for content the ML triage couldn't resolve and that carries a NER signal (`NER_REVIEW`). Held at HTTP 202 for human review, audited as `quarantine`, never forwarded.
+
+The dead-zone preservation is what makes quarantine reachable end-to-end — and what closes a fail-OPEN gap that existed before.
+
+---
+
+## Brand and voice
+
+Operator-facing copy (CLI, dashboard, marketing) speaks in the **TSM voice** — terse, mechanical, em-dash-heavy, sovereign-agency register. Visual grammar is square corners, hairline borders, a single `#C7F23E` (`--signal`) accent per fold, mask-wipe reveals, no drop shadows, no gradients.
+
+The full brand spec, design tokens, and component kit live in a separate **TSM — Sovereign Design System** distribution. The public landing (`landing-v5/`) is the canonical rendering of it.
+
+What we never write: *empower / unlock / seamless / leverage / revolutionary / AI-powered*.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+Trade name: **The Sovereign Mechanica.** Legal entity: TSM Pvt Ltd. Contact: <founder@thesovereignmechanica.ai>.

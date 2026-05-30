@@ -1,0 +1,98 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsm-control-plane
+  namespace: tsm
+  labels:
+    app: tsm-control-plane
+    app.kubernetes.io/component: control-plane
+spec:
+  replicas: 2   # HA: 2 replicas — policy store is in-memory, so both replicas
+                # serve the same initial built-in rules. For persistent policy
+                # across restarts, back the store with etcd (Phase 2).
+  selector:
+    matchLabels:
+      app: tsm-control-plane
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: tsm-control-plane
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "9090"
+        prometheus.io/path:   "/metrics"
+    spec:
+      terminationGracePeriodSeconds: 15
+      containers:
+        - name: control-plane
+          image: tsm/control-plane:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: tsm-config
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "64Mi"
+            limits:
+              cpu:    "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 3
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-plane-svc
+  namespace: tsm
+  labels:
+    app: tsm-control-plane
+spec:
+  selector:
+    app: tsm-control-plane
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP
+---
+# Expose control plane admin API via LoadBalancer only for cluster-internal use.
+# In production, put this behind an Ingress with mTLS and IP allowlisting.
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-plane-admin
+  namespace: tsm
+  labels:
+    app: tsm-control-plane
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"  # AWS internal LB
+spec:
+  selector:
+    app: tsm-control-plane
+  ports:
+    - name: admin
+      port: 9090
+      targetPort: 9090
+  type: LoadBalancer
+  loadBalancerSourceRanges:
+    - "10.0.0.0/8"   # restrict to RFC1918 only

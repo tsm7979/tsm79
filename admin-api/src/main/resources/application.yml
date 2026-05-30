@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: tsm-admin-api
+  datasource:
+    url: ${TSM_PG_URL:jdbc:postgresql://localhost:5432/tsm}
+    username: ${TSM_PG_USER:tsm}
+    password: ${TSM_PG_PASSWORD:tsm}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+      schema: tsm
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: tsm
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: false  # Flyway is run separately via deploy/postgres/migrations/
+
+server:
+  port: ${TSM_ADMIN_PORT:9090}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+tsm:
+  jwt:
+    secret: ${TSM_JWT_SECRET:change-me-in-production-must-be-32-bytes-min}
+    access-token-ttl-minutes: ${TSM_JWT_ACCESS_TTL:15}
+    refresh-token-ttl-days: ${TSM_JWT_REFRESH_TTL:30}
+  admin:
+    default-org-id: ${TSM_DEFAULT_ORG_ID:00000000-0000-0000-0000-000000000001}

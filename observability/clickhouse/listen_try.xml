@@ -1,0 +1,7 @@
+<clickhouse>
+    <!-- Docker networks often lack IPv6. The base image config lists both
+         <listen_host>::</listen_host> and 0.0.0.0; without listen_try a failed
+         IPv6 bind aborts startup so port 8123 never opens. listen_try=1 makes
+         ClickHouse skip the unavailable address and keep the IPv4 listener. -->
+    <listen_try>1</listen_try>
+</clickhouse>

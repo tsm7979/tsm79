@@ -6,33 +6,68 @@ authors = [{name = "TSM Team", email = "team@tsm.dev"}]
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
-keywords = ["ai", "firewall", "pii", "security", "openai", "proxy", "llm"]
+keywords = ["ai", "firewall", "pii", "security", "openai", "proxy", "llm", "data-privacy"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Security",
     "Topic :: Internet :: Proxy Servers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = []  # zero runtime dependencies — pure Python stdlib
+dependencies = []  # CLI + Python proxy: zero runtime deps — pure stdlib
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
-    "black>=23.0",
-    "ruff>=0.1",
+    "ruff>=0.4",
 ]
-full = [
-    "fastapi>=0.104",
-    "uvicorn[standard]>=0.24",
-    "httpx>=0.25",
+detector = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.7",
+    "spacy>=3.7.0",
+    "scikit-learn>=1.4",    # Isolation Forest anomaly detection
+    "redis>=5.0",           # distributed behavioral + correlation state
+]
+semantic = [
+    "sentence-transformers>=2.7",   # local all-MiniLM-L6-v2 (80MB, CPU-fast)
+]
+grpc = [
+    "grpcio>=1.62",
+    "grpcio-tools>=1.62",           # proto compilation
+    "grpcio-reflection>=1.62",      # service discovery
+]
+presidio = [
+    "presidio-analyzer>=2.2",       # Presidio NER + deterministic validators
+    "presidio-anonymizer>=2.2",
+]
+otel = [
+    "opentelemetry-sdk>=1.24",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.24",  # gRPC OTLP (default)
+    "opentelemetry-exporter-otlp-proto-http>=1.24",  # HTTP OTLP (alt)
+]
+all = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.7",
+    "spacy>=3.7.0",
+    "scikit-learn>=1.4",
+    "redis>=5.0",
+    "sentence-transformers>=2.7",
+    "grpcio>=1.62",
+    "grpcio-tools>=1.62",
+    "grpcio-reflection>=1.62",
+    "presidio-analyzer>=2.2",
+    "presidio-anonymizer>=2.2",
+    "opentelemetry-sdk>=1.24",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.24",
+    "opentelemetry-exporter-otlp-proto-http>=1.24",
 ]
 
 [project.urls]
@@ -49,20 +84,19 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where   = ["."]
-include = ["tsm*"]
+include = ["tsm*", "detector*"]
 
 [tool.setuptools.package-data]
-"tsm" = ["py.typed"]
-
-[tool.black]
-line-length    = 100
-target-version = ["py38"]
+"tsm"      = ["py.typed"]
+"detector" = ["py.typed"]
 
 [tool.ruff]
 line-length    = 100
-target-version = "py38"
-select         = ["E", "F", "I", "UP"]
-ignore         = ["E501"]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths    = ["tests"]

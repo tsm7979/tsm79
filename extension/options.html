@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TSM Overlay — Settings</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; padding: 28px 32px; max-width: 560px;
+      font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #0b0e14; color: #e6e9ef;
+    }
+    h1 { font-size: 18px; margin: 0 0 4px; letter-spacing: .2px; }
+    .sub { color: #8b93a7; margin: 0 0 24px; }
+    label { display: block; font-weight: 600; margin: 0 0 6px; }
+    input[type=url] {
+      width: 100%; box-sizing: border-box; padding: 10px 12px;
+      background: #141925; border: 1px solid #283044; border-radius: 8px;
+      color: #e6e9ef; font: inherit;
+    }
+    input:focus { outline: none; border-color: #4c7dff; }
+    .hint { color: #6f7892; font-size: 12.5px; margin: 8px 0 0; }
+    button {
+      margin-top: 18px; padding: 10px 18px; border: 0; border-radius: 8px;
+      background: #4c7dff; color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+    }
+    button:hover { background: #3d6bf0; }
+    .ok { color: #5ad19a; margin-left: 12px; font-weight: 600; opacity: 0; transition: opacity .2s; }
+    .ok.show { opacity: 1; }
+    code { background: #141925; padding: 1px 6px; border-radius: 5px; color: #b9c2da; }
+  </style>
+</head>
+<body>
+  <h1>TSM Sovereign Overlay</h1>
+  <p class="sub">Where to reach your TSM gateway — the data plane that resolves
+    <code>.tsm</code> names and governs the content.</p>
+
+  <label for="gateway">Gateway URL</label>
+  <input id="gateway" type="url" placeholder="http://localhost:8080" spellcheck="false" />
+  <p class="hint">The data plane's overlay endpoint. Names are opened as
+    <code>&lt;gateway&gt;/_tsm/&lt;name&gt;</code>. Default: <code>http://localhost:8080</code>.</p>
+
+  <div>
+    <button id="save">Save</button>
+    <span id="ok" class="ok">Saved</span>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

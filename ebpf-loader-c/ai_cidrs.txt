@@ -1,0 +1,38 @@
+# TSM default AI provider CIDR list
+# Lines starting with # are comments.
+# One CIDR per line. Loaded by tsm_loader into the XDP LPM trie map.
+# These CIDRs cover major AI provider edge/API endpoints as of 2025.
+#
+# To add custom CIDRs at runtime:
+#   echo "ADD 192.0.2.0/24" | nc -u localhost 19999
+#
+# ── Cloudflare (OpenAI CDN edge) ──────────────────────────────────────────────
+104.18.0.0/16
+104.19.0.0/16
+104.20.0.0/16
+104.21.0.0/16
+104.22.0.0/16
+162.158.0.0/15
+198.41.128.0/17
+198.41.200.0/22
+
+# ── Amazon AWS (Anthropic, Bedrock, SageMaker) ────────────────────────────────
+3.208.0.0/12
+34.0.0.0/8
+52.0.0.0/8
+54.0.0.0/8
+13.32.0.0/15
+13.224.0.0/14
+
+# ── Microsoft Azure (Azure OpenAI Service) ────────────────────────────────────
+20.0.0.0/11
+40.64.0.0/10
+52.224.0.0/11
+
+# ── Google Cloud (Vertex AI, Gemini API) ─────────────────────────────────────
+34.64.0.0/10
+34.128.0.0/10
+35.184.0.0/13
+
+# ── OpenAI direct IPs ─────────────────────────────────────────────────────────
+23.253.0.0/19

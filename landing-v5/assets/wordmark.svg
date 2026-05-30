@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" fill="none">
+  
+  <g font-family="Instrument Serif, serif" fill="currentColor">
+    <text x="0" y="64" font-size="80" letter-spacing="-3" font-weight="400">TSM</text>
+    <text x="190" y="38" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" font-weight="500" fill="currentColor" opacity="0.6">79</text>
+    <text x="190" y="56" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="1.5" font-weight="400" fill="currentColor" opacity="0.5">SOVEREIGN</text>
+    <text x="190" y="68" font-family="JetBrains Mono, monospace" font-size="9" letter-spacing="1.5" font-weight="400" fill="currentColor" opacity="0.5">MECHANICA</text>
+  </g>
+  
+  <line x1="0" y1="74" x2="180" y2="74" stroke="currentColor" stroke-width="1" opacity="0.3"></line>
+</svg>

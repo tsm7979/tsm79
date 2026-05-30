@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  
+  <circle cx="60" cy="60" r="58" stroke="currentColor" stroke-width="1" opacity="0.4"></circle>
+  <circle cx="60" cy="60" r="48" stroke="currentColor" stroke-width="1" opacity="0.6"></circle>
+  
+  <line x1="2" y1="60" x2="118" y2="60" stroke="currentColor" stroke-width="0.5" opacity="0.4"></line>
+  <line x1="60" y1="2" x2="60" y2="118" stroke="currentColor" stroke-width="0.5" opacity="0.4"></line>
+  
+  <text x="60" y="55" text-anchor="middle" font-family="Instrument Serif, serif" font-size="32" letter-spacing="-1" fill="currentColor" font-weight="400">TSM</text>
+  <text x="60" y="72" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="7" letter-spacing="3" fill="currentColor" opacity="0.7" font-weight="500">SOVEREIGN</text>
+  
+  <circle cx="60" cy="12" r="2" fill="currentColor"></circle>
+  <circle cx="60" cy="108" r="2" fill="currentColor"></circle>
+  <circle cx="12" cy="60" r="2" fill="currentColor"></circle>
+  <circle cx="108" cy="60" r="2" fill="currentColor"></circle>
+  
+  <rect x="92" y="26" width="6" height="6" fill="#C7F23E"></rect>
+</svg>

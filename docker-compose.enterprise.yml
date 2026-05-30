@@ -1,0 +1,469 @@
+version: "3.9"
+
+# TSM Enterprise Stack — The Sovereign Mechanica
+#
+# Services:
+#   db           PostgreSQL 16  — durable storage (audit, policy, nodes, sessions)
+#   redis        Redis 7        — behavioral analysis + rate-limit state
+#   migrate      Flyway         — runs V001-V006 migrations on first boot
+#   detector     Python/FastAPI — ML threat detector (Ambiguous verdicts only)
+#   dataplane    Rust           — high-performance AI proxy + audit hot path
+#   control-plane Go            — policy versioning, node registry, health federation
+#   admin-api    Java 21        — enterprise REST API (RBAC, workspaces, audit query)
+#   dashboard    Next.js        — real-time SOC dashboard
+#   nginx        Nginx          — TLS termination + reverse proxy
+#
+# Quick start:
+#   cp .env.enterprise.example .env
+#   docker compose -f docker-compose.enterprise.yml up -d
+#   docker compose -f docker-compose.enterprise.yml ps
+#
+# To run migrations manually after schema changes:
+#   docker compose -f docker-compose.enterprise.yml run --rm migrate
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "5"
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-pg-env: &pg-env
+  POSTGRES_DB:       tsm
+  POSTGRES_USER:     tsm
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+
+# ── Networks ────────────────────────────────────────────────────────────────────
+networks:
+  tsm-internal:
+    driver: bridge
+  tsm-public:
+    driver: bridge
+
+# ── Volumes ─────────────────────────────────────────────────────────────────────
+volumes:
+  pgdata:
+  tsmdata:
+  audit_log:
+  nginx_certs:
+  chdata:      # ClickHouse data directory
+
+services:
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    <<: *restart
+    environment:
+      <<: *pg-env
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # init.sql creates the tsm role + database (runs only on first boot)
+      - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+    networks:
+      - tsm-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tsm -d tsm"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+    logging: *logging
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    <<: *restart
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    networks:
+      - tsm-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
+  # ── Schema migrations ────────────────────────────────────────────────────────
+  # Runs Flyway against V001-V006 SQL files, then exits.
+  # Subsequent starts are no-ops (Flyway tracks applied migrations).
+  migrate:
+    image: flyway/flyway:10-alpine
+    command: >
+      -url=jdbc:postgresql://db:5432/tsm
+      -user=tsm
+      -password=${POSTGRES_PASSWORD}
+      -schemas=tsm
+      -locations=filesystem:/flyway/sql
+      -connectRetries=30
+      migrate
+    volumes:
+      - ./deploy/postgres/migrations:/flyway/sql:ro
+    networks:
+      - tsm-internal
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+
+  # ── Python Detector ──────────────────────────────────────────────────────────
+  detector:
+    build:
+      context: .
+      dockerfile: Dockerfile.detector
+    <<: *restart
+    environment:
+      DETECTOR_PORT:     "8001"
+      DATABASE_URL:      postgresql://tsm:${POSTGRES_PASSWORD}@db:5432/tsm
+      REDIS_URL:         redis://:${REDIS_PASSWORD}@redis:6379/0
+      OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      TSM_LOG_FORMAT:    json
+      HOME:              /tmp
+    volumes:
+      - tsmdata:/data
+    networks:
+      - tsm-internal
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # The slim Python image has no wget/curl; use the interpreter directly.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *logging
+
+  # ── Detector gRPC (typed DetectService — proto/detect.proto) ─────────────────
+  # Same image as `detector`, but serves the typed gRPC contract on :50051 that
+  # the Rust dataplane calls for the ML detection tier (regex/entropy run in Rust;
+  # Python is the ONLY place ML inference happens — see proto/detect.proto).
+  detector-grpc:
+    build:
+      context: .
+      dockerfile: Dockerfile.detector
+    <<: *restart
+    command: ["python", "-m", "detector.grpc_server"]
+    environment:
+      GRPC_PORT:    "50051"
+      DATABASE_URL: postgresql://tsm:${POSTGRES_PASSWORD}@db:5432/tsm
+      REDIS_URL:    redis://:${REDIS_PASSWORD}@redis:6379/0
+      HOME:         /tmp
+    networks:
+      - tsm-internal
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # gRPC liveness: the :50051 port accepts connections (python is in the image).
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1',50051),timeout=3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 35s
+    logging: *logging
+
+  # ── Rust Dataplane ───────────────────────────────────────────────────────────
+  dataplane:
+    build:
+      context: .
+      dockerfile: Dockerfile.dataplane
+    <<: *restart
+    environment:
+      TSM_LISTEN:                "0.0.0.0:8080"
+      TSM_DETECTOR_URL:          "http://detector:8001"
+      # Typed gRPC detector (used by the grpc-feature build); call_python_detector()
+      # prefers this and falls back to TSM_DETECTOR_URL (HTTP) if unset/unreachable.
+      GRPC_DETECTOR_URL:         "http://detector-grpc:50051"
+      TSM_DETECTOR_TIMEOUT_MS:   "${TSM_DETECTOR_TIMEOUT_MS:-5000}"
+      TSM_AUDIT_LOG:             "/var/log/tsm/audit.log"
+      TSM_AUDIT_SECRET:          "${TSM_AUDIT_SECRET:?TSM_AUDIT_SECRET is required}"
+      TSM_POOL_MAX_IDLE:         "${TSM_POOL_MAX_IDLE:-16}"
+      TSM_DETECTOR_FAILURE_MODE: "${TSM_DETECTOR_FAILURE_MODE:-allow}"
+      TSM_RATE_LIMIT:            "${TSM_RATE_LIMIT:-500}"
+      TSM_LOG_LEVEL:             "${TSM_LOG_LEVEL:-info}"
+      TSM_CONTROL_PLANE_URL:     "http://control-plane:9091"
+      TSM_NODE_ID:               "${HOSTNAME:-tsm-dataplane-1}"
+      # PostgreSQL audit sink
+      TSM_PG_DSN:                "host=db port=5432 dbname=tsm user=tsm password=${POSTGRES_PASSWORD} sslmode=disable"
+      TSM_WORKSPACE_ID:          "${TSM_WORKSPACE_ID:-00000000-0000-0000-0000-000000000002}"
+      TSM_ORG_ID:                "${TSM_ORG_ID:-00000000-0000-0000-0000-000000000001}"
+      # Kafka (optional; leave empty to disable)
+      TSM_KAFKA_BROKERS:         "${TSM_KAFKA_BROKERS:-}"
+      # ClickHouse analytics (optional; leave empty to disable)
+      TSM_CLICKHOUSE_URL:        "${TSM_CLICKHOUSE_URL:-http://tsm:${CLICKHOUSE_PASSWORD}@clickhouse:8123}"
+      # Policy signing public key (base64-encoded Ed25519 public key from control plane)
+      TSM_POLICY_PUBKEY_B64:     "${TSM_POLICY_PUBKEY_B64:-}"
+      # Upstream API keys
+      OPENAI_API_KEY:            "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY:         "${ANTHROPIC_API_KEY:-}"
+    volumes:
+      - audit_log:/var/log/tsm
+    networks:
+      - tsm-internal
+    depends_on:
+      detector:
+        condition: service_healthy
+      detector-grpc:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # Distroless static image — no shell/wget. The binary self-checks via a
+      # built-in subcommand (main.rs do_health_check → 127.0.0.1:8080/health).
+      test: ["CMD", "/usr/local/bin/tsm-dataplane", "--health-check"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+  # ── Go Control Plane ─────────────────────────────────────────────────────────
+  control-plane:
+    build:
+      context: ./control-plane
+      dockerfile: Dockerfile
+    <<: *restart
+    environment:
+      TSM_CP_PORT:                "9091"
+      TSM_CP_HEALTH_INTERVAL:     "10s"
+      TSM_CP_LOG_LEVEL:           "${TSM_LOG_LEVEL:-info}"
+      TSM_PG_DSN:                 "host=db port=5432 dbname=tsm user=tsm password=${POSTGRES_PASSWORD} sslmode=disable"
+      TSM_DEFAULT_WORKSPACE_ID:   "${TSM_WORKSPACE_ID:-00000000-0000-0000-0000-000000000002}"
+      TSM_DEFAULT_ORG_ID:         "${TSM_ORG_ID:-00000000-0000-0000-0000-000000000001}"
+      TSM_QUEUE_GOLD_LIMIT:       "${TSM_QUEUE_GOLD_LIMIT:-0}"
+      TSM_QUEUE_SILVER_LIMIT:     "${TSM_QUEUE_SILVER_LIMIT:-500}"
+      TSM_QUEUE_BRONZE_LIMIT:     "${TSM_QUEUE_BRONZE_LIMIT:-50}"
+    networks:
+      - tsm-internal
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # distroless/static image: no shell or wget, and the binary has no
+    # health subcommand. Nothing gates on this service's health, so disable
+    # the (unrunnable) check — liveness is observable via :9091/health.
+    healthcheck:
+      disable: true
+    logging: *logging
+
+  # ── Java Admin API ───────────────────────────────────────────────────────────
+  admin-api:
+    build:
+      context: ./admin-api
+      dockerfile: Dockerfile
+    <<: *restart
+    environment:
+      TSM_PG_URL:        "jdbc:postgresql://db:5432/tsm"
+      TSM_PG_USER:       "tsm"
+      TSM_PG_PASSWORD:   "${POSTGRES_PASSWORD}"
+      TSM_JWT_SECRET:    "${TSM_JWT_SECRET:?TSM_JWT_SECRET is required (min 32 chars)}"
+      TSM_ADMIN_PORT:    "9090"
+      TSM_DEFAULT_ORG_ID: "${TSM_ORG_ID:-00000000-0000-0000-0000-000000000001}"
+      JAVA_OPTS:         "-XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Xms256m -Xmx1g"
+      # Flyway owns the schema, so Hibernate must not validate/manage DDL.
+      SPRING_JPA_HIBERNATE_DDL_AUTO: "none"
+    networks:
+      - tsm-internal
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging: *logging
+
+  # ── ClickHouse Analytics ─────────────────────────────────────────────────────
+  # Stores AI request telemetry ingested by the Rust dataplane (ingestor.rs).
+  # Schema in observability/clickhouse/schema.sql.
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    <<: *restart
+    environment:
+      CLICKHOUSE_DB:       tsm
+      CLICKHOUSE_USER:     tsm
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    volumes:
+      - chdata:/var/lib/clickhouse
+      - ./observability/clickhouse/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - ./observability/clickhouse/listen_try.xml:/etc/clickhouse-server/config.d/listen_try.xml:ro
+    networks:
+      - tsm-internal
+    healthcheck:
+      # Use 127.0.0.1 (not localhost): with listen_try skipping the unavailable
+      # IPv6 bind, ClickHouse listens on IPv4 only, but `localhost` resolves to
+      # ::1 first inside the container, so wget would hit a dead IPv6 port.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *logging
+
+  # ── Threat Intelligence Feed Aggregator ──────────────────────────────────────
+  # Polls CVE/NVD, CISA KEV, AbuseIPDB, OTX, Tor exit nodes, VPN CIDRs,
+  # MITRE ATT&CK → writes IP reputation + IOC data to Redis.
+  # The Rust dataplane consults Redis for threat scores; the eBPF loader
+  # programs the XDP blocklist from tsm:xdp:blocklist.
+  threat-intel:
+    build:
+      context: ./threat-intel
+      dockerfile: Dockerfile
+    <<: *restart
+    environment:
+      TSM_REDIS_URL:      "redis://:${REDIS_PASSWORD}@redis:6379"
+      # main.go reads the password from TSM_REDIS_PASSWORD, not from the URL.
+      TSM_REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      TSM_LISTEN_ADDR:    ":9100"
+      TSM_LOG_LEVEL:      "${TSM_LOG_LEVEL:-info}"
+      TSM_NVD_API_KEY:    "${TSM_NVD_API_KEY:-}"
+      TSM_ABUSEIPDB_KEY:  "${TSM_ABUSEIPDB_KEY:-}"
+      TSM_OTX_API_KEY:    "${TSM_OTX_API_KEY:-}"
+    networks:
+      - tsm-internal
+    depends_on:
+      redis:
+        condition: service_healthy
+    # scratch image: no shell/wget and no health subcommand. Nothing gates on
+    # it, so disable the unrunnable check — liveness is observable via :9100/health.
+    healthcheck:
+      disable: true
+    logging: *logging
+
+  # ── eBPF/XDP Loader (Layer 1: kernel network authority) ──────────────────────
+  # Attaches the XDP programs at the NIC, pins maps at /sys/fs/bpf/tsm, and syncs
+  # threat-intel's Redis `tsm:xdp:blocklist` into the kernel `ip_blocked` map so
+  # feed entries are dropped (XDP_DROP) before the network stack. Needs privilege.
+  # Production deploy: deploy/kubernetes/base/ebpf-daemonset.yaml (host net, per-node).
+  # On Docker Desktop / WSL the container only sees its veth, so XDP attach is
+  # best-effort here; the Redis→map sync still runs.
+  ebpf-loader:
+    build:
+      context: .
+      dockerfile: Dockerfile.ebpf-loader
+    <<: *restart
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - BPF
+      - SYS_ADMIN
+    environment:
+      TSM_REDIS_HOST:     "redis"
+      TSM_REDIS_PORT:     "6379"
+      TSM_REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      TSM_XDP_IFACE:      "${TSM_XDP_IFACE:-eth0}"
+    networks:
+      - tsm-internal
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Liveness: the XDP map is pinned ⇒ program attached + loader running.
+      test: ["CMD-SHELL", "test -e /sys/fs/bpf/tsm/ip_blocked"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging: *logging
+
+  # ── Edge Compute (Layer 4: C++ + WebAssembly) ────────────────────────────────
+  # Runs untrusted multi-tenant Wasm "workers" in a fuel-bounded wasmtime sandbox
+  # (Cloudflare/Fastly Workers model). The dataplane will call this per-request in
+  # a later phase; for now it runs as a self-validating liveness service.
+  edge-compute:
+    build:
+      context: .
+      dockerfile: Dockerfile.edge
+    <<: *restart
+    command: ["sh", "-c", "while true; do /usr/local/bin/edge_host /opt/tsm/worker.wasm && touch /tmp/edge_ok; sleep 30; done"]
+    networks:
+      - tsm-internal
+    healthcheck:
+      # Liveness: the most recent sandbox run succeeded (heartbeat updated <2min ago).
+      test: ["CMD-SHELL", "find /tmp/edge_ok -mmin -2 | grep -q ."]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging: *logging
+
+  # ── Next.js Dashboard ────────────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    <<: *restart
+    environment:
+      NEXT_PUBLIC_PROXY_URL:     "${TSM_EXTERNAL_URL:-http://localhost:8080}"
+      NEXT_PUBLIC_ADMIN_API_URL: "${TSM_ADMIN_URL:-http://localhost:9090}"
+      # Next.js standalone binds to $HOSTNAME; without this it binds the container
+      # hostname (network IP only) and the loopback healthcheck is refused.
+      HOSTNAME: "0.0.0.0"
+      PORT: "3001"
+    networks:
+      - tsm-internal
+    depends_on:
+      dataplane:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+  # ── Nginx Reverse Proxy ──────────────────────────────────────────────────────
+  # TLS termination, routing, rate limiting at the edge.
+  # Routes:
+  #   /                 → dashboard:3001
+  #   /v1/              → dataplane:8080  (AI proxy)
+  #   /api/             → admin-api:9090  (enterprise REST API)
+  #   /cp/              → control-plane:9091 (internal — restricted to admin token)
+  nginx:
+    image: nginx:1.25-alpine
+    <<: *restart
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_certs:/etc/nginx/certs:ro
+    networks:
+      - tsm-internal
+      - tsm-public
+    depends_on:
+      dataplane:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
+      dashboard:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging: *logging

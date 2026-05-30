@@ -377,7 +377,7 @@ _DEMO_CASES = [
     {
         "label":    "HIGH — AWS Key",
         "model":    "gpt-4",
-        "prompt":   "Why does AKIAIOSFODNN7EXAMPLE1234 get access denied?",
+        "prompt":   "Why does AKIA_DEMO_FIXTURE_AB1234 get access denied?",
         "pii":      ["AWS_KEY"],
         "severity": "HIGH",
         "local":    False,
@@ -1261,7 +1261,7 @@ def cmd_test(args: argparse.Namespace) -> int:
         ("CREDIT_CARD", "Card: 4111 1111 1111 1111",           Severity.CRITICAL),
         ("PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----",     Severity.CRITICAL),
         ("OPENAI_KEY",  "sk-aBcDeFgHiJkLmNoPqRsTuVwXyzabcd",  Severity.HIGH),
-        ("AWS_KEY",     "key=AKIAIOSFODNN7EXAMPLE1234",         Severity.HIGH),
+        ("AWS_KEY",     "key=AKIA_DEMO_FIXTURE_AB1234",         Severity.HIGH),
         ("EMAIL",       "email user@example.com",               Severity.MEDIUM),
         ("PHONE",       "call (555) 123-4567",                  Severity.MEDIUM),
         ("CLEAN",       "What is 2 + 2?",                       None),

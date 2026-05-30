@@ -1,0 +1,171 @@
+{{/* ── Proxy Deployment ─────────────────────────────────────────────────────── */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-proxy
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: proxy
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: proxy
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.proxy.port | quote }}
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: proxy
+          image: {{ include "tsm.image" (dict "root" . "comp" "proxy") }}
+          imagePullPolicy: {{ .Values.image.proxy.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.proxy.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+          {{- if or .Values.secrets.openaiApiKey .Values.secrets.anthropicApiKey }}
+            - secretRef:
+                name: {{ .Release.Name }}-secrets
+          {{- end }}
+          env:
+            - name: DATABASE_URL
+              {{- if .Values.postgresql.enabled }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.auth.existingSecret }}
+                  key: POSTGRES_PASSWORD
+              {{- else }}
+              value: ""
+              {{- end }}
+          {{- if .Values.postgresql.enabled }}
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.auth.existingSecret }}
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://{{ .Values.postgresql.auth.username }}:$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:5432/{{ .Values.postgresql.auth.database }}"
+          {{- end }}
+          resources:
+            {{- toYaml .Values.proxy.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+---
+{{/* ── Detector Deployment ──────────────────────────────────────────────────── */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-detector
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: detector
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: detector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: detector
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534  # matches Dockerfile.detector: USER nobody (UID 65534)
+      containers:
+        - name: detector
+          image: {{ include "tsm.image" (dict "root" . "comp" "detector") }}
+          imagePullPolicy: {{ .Values.image.detector.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.detector.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+          {{- if or .Values.secrets.openaiApiKey .Values.secrets.anthropicApiKey }}
+            - secretRef:
+                name: {{ .Release.Name }}-secrets
+          {{- end }}
+          resources:
+            {{- toYaml .Values.detector.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 8
+            periodSeconds: 10
+---
+{{/* ── Dashboard Deployment ─────────────────────────────────────────────────── */}}
+{{- if .Values.dashboard.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-dashboard
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: dashboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: dashboard
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: dashboard
+          image: {{ include "tsm.image" (dict "root" . "comp" "dashboard") }}
+          imagePullPolicy: {{ .Values.image.dashboard.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.dashboard.port }}
+          env:
+            - name: NEXT_PUBLIC_PROXY_URL
+              value: "http://{{ .Release.Name }}-proxy:{{ .Values.proxy.port }}"
+          resources:
+            {{- toYaml .Values.dashboard.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+{{- end }}

@@ -1,0 +1,110 @@
+# TSM Helm chart default values
+# Override with: helm install tsm ./deploy/helm/tsm -f my-values.yaml
+
+replicaCount: 1
+
+image:
+  proxy:
+    repository: ghcr.io/tsm7979/tsm-proxy
+    tag: "2.0.0"
+    pullPolicy: IfNotPresent
+  detector:
+    repository: ghcr.io/tsm7979/tsm-detector
+    tag: "2.0.0"
+    pullPolicy: IfNotPresent
+  dashboard:
+    repository: ghcr.io/tsm7979/tsm-dashboard
+    tag: "2.0.0"
+    pullPolicy: IfNotPresent
+
+proxy:
+  port: 8080
+  rateLimit: 100          # requests per minute per client IP
+  logFormat: json
+  resources:
+    requests: { cpu: "100m", memory: "128Mi" }
+    limits:   { cpu: "500m", memory: "256Mi" }
+
+detector:
+  port: 8001
+  workers: 2
+  logLevel: warning
+  resources:
+    requests: { cpu: "200m", memory: "512Mi" }
+    limits:   { cpu: "1000m", memory: "1Gi" }
+
+dashboard:
+  enabled: true
+  port: 3001
+  resources:
+    requests: { cpu: "50m",  memory: "64Mi" }
+    limits:   { cpu: "200m", memory: "128Mi" }
+
+postgresql:
+  enabled: true
+  auth:
+    database: tsm
+    username: tsm
+    existingSecret: tsm-postgres-secret  # must contain POSTGRES_PASSWORD
+
+service:
+  proxy:
+    type: ClusterIP   # change to LoadBalancer or use Ingress for external access
+    port: 8080
+  detector:
+    type: ClusterIP
+    port: 8001
+  dashboard:
+    type: ClusterIP
+    port: 3001
+
+ingress:
+  enabled: false
+  className: nginx
+  hosts:
+    - host: tsm.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: proxy
+
+secrets:
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  webhookUrl: ""
+  # Threat-intel feed API keys (leave empty to disable the respective feed)
+  nvdApiKey: ""          # NVD — optional, raises rate limit
+  abuseipdbKey: ""       # AbuseIPDB — required for IP reputation feed
+  otxApiKey: ""          # AlienVault OTX — required for IOC feed
+  # Infrastructure secrets
+  redisPassword: ""      # Required when Redis auth is enabled
+  clickhousePassword: "" # Required when ClickHouse is enabled
+
+threatIntel:
+  enabled: true
+  image:
+    repository: ghcr.io/tsm7979/tsm-threat-intel
+    tag: "2.0.0"
+    pullPolicy: IfNotPresent
+  port: 9100
+  logLevel: info
+  resources:
+    requests: { cpu: "50m",  memory: "64Mi" }
+    limits:   { cpu: "200m", memory: "256Mi" }
+
+clickhouse:
+  enabled: true
+  image:
+    repository: clickhouse/clickhouse-server
+    tag: "24.3-alpine"
+    pullPolicy: IfNotPresent
+  storage: 50Gi
+  resources:
+    requests: { cpu: "200m", memory: "512Mi" }
+    limits:   { cpu: "2000m", memory: "4Gi" }
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70

@@ -1,0 +1,115 @@
+---
+# Dataplane: Rust binary — DaemonSet so one instance runs on every node
+# for minimum-latency interception (no cross-node hop).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: tsm-dataplane
+  namespace: tsm
+  labels:
+    app: tsm-dataplane
+    app.kubernetes.io/component: dataplane
+spec:
+  selector:
+    matchLabels:
+      app: tsm-dataplane
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: tsm-dataplane
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "8080"
+        prometheus.io/path:   "/api/metrics"
+    spec:
+      hostNetwork: false   # set true if you need iptables intercept at host level
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: dataplane
+          image: tsm/dataplane:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: proxy
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: tsm-config
+          env:
+            - name: TSM_AUDIT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: tsm-secrets
+                  key: audit-secret
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: audit
+              mountPath: /data/audit
+          resources:
+            requests:
+              cpu:    "250m"
+              memory: "128Mi"
+            limits:
+              cpu:    "2000m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+      volumes:
+        - name: audit
+          emptyDir: {}   # replace with PersistentVolumeClaim for durable audit logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataplane-svc
+  namespace: tsm
+  labels:
+    app: tsm-dataplane
+spec:
+  selector:
+    app: tsm-dataplane
+  ports:
+    - name: proxy
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP
+---
+# HPA scales per-pod replicas when using a Deployment (not DaemonSet).
+# Uncomment and switch DaemonSet → Deployment for cloud deployments.
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: tsm-dataplane-hpa
+#   namespace: tsm
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: tsm-dataplane
+#   minReplicas: 2
+#   maxReplicas: 20
+#   metrics:
+#     - type: Resource
+#       resource:
+#         name: cpu
+#         target:
+#           type: Utilization
+#           averageUtilization: 60

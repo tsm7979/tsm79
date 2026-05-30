@@ -1,0 +1,385 @@
+# TSM — Cilium L7 AI Traffic Interception
+#
+# Architecture:
+#
+#   Application pod → Cilium Envoy sidecar → TSM dataplane → AI provider
+#                                  ↑
+#                    CiliumEnvoyConfig inserts an Envoy HTTP filter
+#                    that rewrites the Host header and routes all traffic
+#                    destined for AI APIs through the TSM sanitizer before
+#                    it ever reaches the upstream TLS endpoint.
+#
+# Resources defined here:
+#
+#   1. CiliumEnvoyConfig (tsm-ai-intercept)
+#      Configures Envoy to transparently proxy all HTTP/HTTPS traffic from
+#      non-dataplane pods bound for AI API domains through the TSM dataplane.
+#
+#      Listener 10000 catches the AI-bound TCP connections, passes them
+#      through an HTTP connection manager that routes to the tsm-dataplane
+#      cluster (port 8080).  The TSM dataplane inspects, redacts, or blocks
+#      the request before forwarding upstream.
+#
+#   2. CiliumNetworkPolicy (tsm-l7-ai-enforcement)
+#      Enforces at L7 that all HTTP/HTTPS egress from non-dataplane pods
+#      to AI provider CIDRs is routed through the Cilium Envoy listener
+#      rather than directly to the destination.  Pairs with the L3/L4
+#      NetworkPolicy in network-policy.yaml for defense-in-depth.
+#
+# Requirements:
+#   - Cilium ≥ 1.14 with Envoy proxy enabled (--enable-envoy-config=true)
+#   - KV Store: etcd or Kubernetes CRD mode
+#   - Pods labeled tsm.io/role: dataplane | app | detector | control-plane
+#
+# Apply:
+#   kubectl apply -k deploy/kubernetes/base/
+#   # Verify listener is up:
+#   kubectl -n tsm exec ds/cilium -c cilium-agent -- cilium envoy listeners
+#
+# Observability:
+#   Envoy stats are exposed at cilium-agent:9095/stats — filter by
+#   "tsm_ai_intercept" prefix.  Datadog/Prometheus scrape via:
+#   kubectl port-forward ds/cilium 9095 -n kube-system
+
+---
+# ── 1. Envoy configuration for transparent AI traffic interception ─────────────
+apiVersion: cilium.io/v2
+kind: CiliumEnvoyConfig
+metadata:
+  name: tsm-ai-intercept
+  namespace: tsm
+  labels:
+    app.kubernetes.io/part-of: tsm
+    tsm.io/component: l7-intercept
+  annotations:
+    tsm.io/description: >
+      Routes all HTTP/HTTPS egress from application pods destined for AI provider
+      domains (OpenAI, Anthropic, Google AI) through the TSM dataplane sanitizer
+      before the request reaches the upstream provider TLS endpoint.
+spec:
+  # CiliumEnvoyConfig only affects pods in the same namespace that are selected
+  # by the accompanying CiliumNetworkPolicy.  The TSM dataplane pods are excluded
+  # (they have tsm.io/role=dataplane) so their traffic is not double-proxied.
+  services:
+    - name: tsm-dataplane
+      namespace: tsm
+
+  resources:
+    # ── Listener: intercept AI-bound connections ────────────────────────────────
+    #
+    # Cilium's transparent interception uses TPROXY at the BPF layer to redirect
+    # egress connections matching the CiliumNetworkPolicy below to this listener
+    # port (10000).  The original destination is preserved in SO_ORIGINAL_DST so
+    # Envoy can use it for routing decisions.
+    - "@type": type.googleapis.com/envoy.config.listener.v3.Listener
+      name: tsm_ai_intercept_listener
+      address:
+        socket_address:
+          address: 127.0.0.1
+          port_value: 10000
+      listener_filters:
+        # Preserve original destination for routing
+        - name: envoy.filters.listener.original_dst
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.listener.original_dst.v3.OriginalDst
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: tsm_ai_intercept
+                use_remote_address: true
+                # Forward the original X-Forwarded-For so the TSM dataplane can
+                # log the real client IP rather than 127.0.0.1
+                xff_num_trusted_hops: 1
+                route_config:
+                  name: tsm_ai_route_config
+                  virtual_hosts:
+                    # OpenAI
+                    - name: openai
+                      domains:
+                        - "api.openai.com"
+                        - "api.openai.com:443"
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: tsm_dataplane_cluster
+                            host_rewrite_literal: "api.openai.com"
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: reset,connect-failure
+                              num_retries: 1
+
+                    # Anthropic
+                    - name: anthropic
+                      domains:
+                        - "api.anthropic.com"
+                        - "api.anthropic.com:443"
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: tsm_dataplane_cluster
+                            host_rewrite_literal: "api.anthropic.com"
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: reset,connect-failure
+                              num_retries: 1
+
+                    # Google Vertex AI / Gemini
+                    - name: google_ai
+                      domains:
+                        - "generativelanguage.googleapis.com"
+                        - "generativelanguage.googleapis.com:443"
+                        - "us-central1-aiplatform.googleapis.com"
+                        - "us-central1-aiplatform.googleapis.com:443"
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: tsm_dataplane_cluster
+                            host_rewrite_literal: "generativelanguage.googleapis.com"
+                            timeout: 120s
+                            retry_policy:
+                              retry_on: reset,connect-failure
+                              num_retries: 1
+
+                    # Catch-all: any other host — pass directly, log the miss
+                    - name: passthrough
+                      domains:
+                        - "*"
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: tsm_dataplane_cluster
+                            timeout: 60s
+
+                http_filters:
+                  # Inject TSM tracing headers so the dataplane can correlate
+                  # Envoy access logs with its own structured telemetry.
+                  - name: envoy.filters.http.header_mutation
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.header_mutation.v3.HeaderMutation
+                      mutations:
+                        request_mutations:
+                          - append:
+                              header:
+                                key: X-TSM-Source
+                                value: cilium-envoy
+                          - append:
+                              header:
+                                key: X-TSM-Namespace
+                                value: "%REQ(:AUTHORITY)%"
+
+                  # Router must be last
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+                # Access logging — JSON to stdout, picked up by Fluentd/Datadog
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          ts:            "%START_TIME%"
+                          method:        "%REQ(:METHOD)%"
+                          host:          "%REQ(:AUTHORITY)%"
+                          path:          "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                          status:        "%RESPONSE_CODE%"
+                          duration_ms:   "%DURATION%"
+                          bytes_in:      "%BYTES_RECEIVED%"
+                          bytes_out:     "%BYTES_SENT%"
+                          upstream:      "%UPSTREAM_HOST%"
+                          source_pod:    "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
+                          component:     "cilium-envoy-tsm"
+
+    # ── Cluster: TSM dataplane service ─────────────────────────────────────────
+    #
+    # Routes all intercepted AI traffic to the TSM dataplane running at
+    # tsm-dataplane.tsm.svc.cluster.local:8080.
+    #
+    # The TSM dataplane receives the request, inspects it, and forwards to the
+    # original upstream using its own TLS handshake.  The `Host` header set above
+    # in host_rewrite_literal tells the dataplane which upstream to call.
+    - "@type": type.googleapis.com/envoy.config.cluster.v3.Cluster
+      name: tsm_dataplane_cluster
+      connect_timeout: 5s
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      lb_policy: LEAST_REQUEST
+      # Circuit breaker: trip if > 512 pending requests (matches TSM_MAX_CONNECTIONS)
+      circuit_breakers:
+        thresholds:
+          - priority: DEFAULT
+            max_connections: 512
+            max_pending_requests: 512
+            max_requests: 1024
+            track_remaining: true
+      # Health checks — Envoy probes the TSM /health endpoint
+      health_checks:
+        - timeout: 3s
+          interval: 10s
+          unhealthy_threshold: 3
+          healthy_threshold: 1
+          http_health_check:
+            path: /health
+            expected_statuses:
+              - start: 200
+                end: 201
+      load_assignment:
+        cluster_name: tsm_dataplane_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: tsm-dataplane.tsm.svc.cluster.local
+                      port_value: 8080
+      # Outlier detection: eject unresponsive dataplane pods
+      outlier_detection:
+        consecutive_5xx: 5
+        interval: 10s
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+
+---
+# ── 2. CiliumNetworkPolicy: enforce L7 routing through the Envoy listener ──────
+#
+# This L7 CiliumNetworkPolicy tells Cilium to redirect HTTP/HTTPS egress from
+# all non-dataplane pods to the Envoy listener (port 10000) before the packet
+# reaches the external AI provider.  Without this, the CiliumEnvoyConfig above
+# would be configured but not wired to any traffic.
+#
+# The policy works at L7 by inspecting the HTTP Host header — matches for the
+# AI provider domains listed above are redirected to the local Envoy proxy.
+# Non-matching traffic is allowed through as-is (DNS, internal cluster traffic).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: tsm-l7-ai-enforcement
+  namespace: tsm
+  labels:
+    app.kubernetes.io/part-of: tsm
+    tsm.io/component: l7-intercept
+spec:
+  # Target: application pods that should have AI traffic inspected.
+  # Dataplane pods (tsm.io/role=dataplane) are excluded so they can
+  # reach upstream AI APIs directly after inspection is complete.
+  endpointSelector:
+    matchLabels:
+      tsm.io/role: app
+
+  egressDeny: []  # no blanket deny here — we use egress allow-list below
+
+  egress:
+    # ── Allow DNS (required for STRICT_DNS cluster in Envoy) ─────────────────
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+
+    # ── Allow traffic to the TSM dataplane (which Envoy will route to) ────────
+    - toEndpoints:
+        - matchLabels:
+            tsm.io/role: dataplane
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+
+    # ── L7 rule: redirect AI API HTTP/HTTPS to the TSM Envoy listener ─────────
+    # Cilium matches the HTTP Host header and redirects to the CiliumEnvoyConfig
+    # listener (port 10000) instead of forwarding directly.
+    - toCIDRSet:
+        # OpenAI ASN54113 CIDR ranges (best-effort; use egress gateway for production)
+        - cidr: 104.18.0.0/16
+        - cidr: 172.64.0.0/13
+        - cidr: 162.158.0.0/15
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+          rules:
+            http:
+              # Redirect requests to OpenAI to TSM listener
+              - method: ".*"
+                path: ".*"
+                headers:
+                  - name: "Host"
+                    regex: "api\\.openai\\.com(:.*)?"
+
+    - toCIDRSet:
+        # Anthropic CDN/origin CIDR (Cloudflare-hosted as of 2024)
+        - cidr: 104.18.0.0/16
+        - cidr: 198.41.128.0/17
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+          rules:
+            http:
+              - method: ".*"
+                path: ".*"
+                headers:
+                  - name: "Host"
+                    regex: "api\\.anthropic\\.com(:.*)?"
+
+    - toCIDRSet:
+        # Google APIs ASN15169
+        - cidr: 142.250.0.0/15
+        - cidr: 172.217.0.0/16
+        - cidr: 74.125.0.0/16
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+          rules:
+            http:
+              - method: ".*"
+                path: ".*"
+                headers:
+                  - name: "Host"
+                    regex: "(generativelanguage|aiplatform)\\.googleapis\\.com(:.*)?"
+
+---
+# ── Prometheus ServiceMonitor — scrape Envoy stats from the TSM listener ───────
+#
+# Requires: prometheus-operator CRDs (kube-prometheus-stack)
+# The cilium-agent exposes Envoy metrics on port 9095 (Envoy admin API).
+# This ServiceMonitor adds the tsm_ai_intercept prefix as a label so
+# Grafana dashboards can filter to TSM-specific Envoy metrics.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: tsm-cilium-envoy
+  namespace: tsm
+  labels:
+    app.kubernetes.io/part-of: tsm
+    tsm.io/component: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  selector:
+    matchLabels:
+      k8s-app: cilium
+  endpoints:
+    - port: prometheus
+      interval: 30s
+      path: /metrics
+      metricRelabelings:
+        # Keep only TSM-related Envoy metrics (tsm_ai_intercept prefix)
+        - sourceLabels: [__name__]
+          regex: "envoy_(cluster_tsm|listener_tsm|http_tsm_ai_intercept).*"
+          action: keep
+        - targetLabel: tsm_cluster
+          replacement: "production"

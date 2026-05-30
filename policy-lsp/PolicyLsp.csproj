@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TSM Policy Language Server / Linter (Layer: developer tooling).
+       C#/.NET + LSP for TSM policy-as-code: validates the rule files that the
+       Python policy_engine and the Rust dataplane both consume, and serves the
+       same diagnostics over the Language Server Protocol to any editor.
+       Self-contained: System.Text.Json only, no external LSP NuGet (reliable build). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>tsm-policy-lsp</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+</Project>

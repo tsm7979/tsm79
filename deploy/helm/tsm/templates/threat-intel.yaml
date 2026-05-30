@@ -1,0 +1,95 @@
+{{- if .Values.threatIntel.enabled }}
+{{/* ── Threat-Intel Deployment ─────────────────────────────────────────────── */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-threat-intel
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: threat-intel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: threat-intel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: threat-intel
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+        - name: threat-intel
+          image: "{{ .Values.threatIntel.image.repository }}:{{ .Values.threatIntel.image.tag }}"
+          imagePullPolicy: {{ .Values.threatIntel.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.threatIntel.port }}
+          env:
+            - name: TSM_LISTEN_ADDR
+              value: ":{{ .Values.threatIntel.port }}"
+            - name: TSM_LOG_LEVEL
+              value: {{ .Values.threatIntel.logLevel | quote }}
+            - name: TSM_REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@{{ .Release.Name }}-redis:6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: redis-password
+                  optional: true
+            - name: TSM_NVD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: nvd-api-key
+                  optional: true
+            - name: TSM_ABUSEIPDB_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: abuseipdb-key
+                  optional: true
+            - name: TSM_OTX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: otx-api-key
+                  optional: true
+          resources:
+            {{- toYaml .Values.threatIntel.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+---
+{{/* ── Threat-Intel Service ────────────────────────────────────────────────── */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-threat-intel
+  labels:
+    {{- include "tsm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: threat-intel
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: threat-intel
+  ports:
+    - name: http
+      port: {{ .Values.threatIntel.port }}
+      targetPort: http
+{{- end }}
