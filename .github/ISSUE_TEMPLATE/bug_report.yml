@@ -1,0 +1,112 @@
+name: 🐛 Bug Report
+description: Something in TSM79 misbehaves. Help us reproduce + fix.
+title: "bug: <short summary>"
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+
+        Before opening:
+        - Confirm it's not a security vulnerability — those go to <founder@thesovereignmechanica.ai>, see [SECURITY.md](../SECURITY.md)
+        - Search existing issues — closed ones too
+        - Test against the latest `main` if you can
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which component?
+      description: Pick the closest match. Pick "I'm not sure" if the bug spans layers.
+      options:
+        - "dataplane (Rust hot path)"
+        - "detector (Python ML)"
+        - "control-plane (Go)"
+        - "threat-intel (Go)"
+        - "overlay-node (Go libp2p)"
+        - "admin-api (Java Spring Boot)"
+        - "policy-lsp (C# .NET)"
+        - "edge (C++ wasmtime)"
+        - "ebpf-loader (Rust)"
+        - "ebpf-loader-c (C)"
+        - "ebpf programs (XDP/TC)"
+        - "dashboard (Next.js)"
+        - "extension (MV3)"
+        - "landing (static)"
+        - "Docker / compose / deploy"
+        - "observability (ClickHouse / Prometheus)"
+        - "policy DSL"
+        - "sovereign overlay (.tsm)"
+        - "I'm not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit SHA
+      description: "Output of `tsm version`, or the commit SHA you're on (e.g. `git rev-parse --short HEAD`)."
+      placeholder: "v3.0.0 — or — d834897"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: "I sent prompt X. The dataplane returned verdict `allow`. I expected `redact`."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Minimal, deterministic steps. Include curl commands, code, config.
+      render: shell
+      placeholder: |
+        1. docker compose -f docker-compose.enterprise.yml up -d
+        2. curl -X POST http://localhost:8080/v1/chat/completions \
+             -H 'Content-Type: application/json' \
+             -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"…"}]}'
+        3. Observe: returns 200 with body forwarded unchanged.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: Relevant logs from the dataplane, detector, or other components.
+      render: shell
+
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: "OS, arch, Docker / podman version, Rust / Python / Go toolchain version if relevant."
+      placeholder: "Ubuntu 22.04 / x86_64 / Docker 25.0 / rustc 1.94"
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Anything else?
+      description: Screenshots, related issues, hypotheses about the root cause, partial diagnoses.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](../CODE_OF_CONDUCT.md).
+      options:
+        - label: I agree to follow the Code of Conduct
+          required: true

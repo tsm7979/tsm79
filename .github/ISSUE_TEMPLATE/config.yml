@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🛡️ Security vulnerability
+    url: https://github.com/tsm7979/tsm79/security/policy
+    about: Do NOT open a public issue for security vulnerabilities. Follow our coordinated-disclosure policy instead.
+  - name: 💬 Discussion / RFC / design conversation
+    url: https://github.com/tsm7979/tsm79/discussions
+    about: For design conversations, RFCs, "have you considered…", or anything not yet a concrete bug or feature.
+  - name: 🌐 The Sovereign Mechanica — product site
+    url: https://www.thesovereignmechanica.ai/
+    about: Marketing site for context on the product, brand, and live demo.
+  - name: 📧 Founder direct
+    url: mailto:founder@thesovereignmechanica.ai
+    about: For partnership conversations, sovereign deployments, or anything that doesn't fit a public issue.

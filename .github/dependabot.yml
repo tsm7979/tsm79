@@ -1,0 +1,171 @@
+version: 2
+
+updates:
+  # ── Rust (workspace + ebpf-loader + tsm-ctl) ────────────────────────────
+  - package-ecosystem: cargo
+    directory: "/dataplane"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  - package-ecosystem: cargo
+    directory: "/ebpf-loader"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - "deps"
+      - "rust"
+      - "ebpf"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  # ── Python (root pyproject — detector + tests + sdk) ─────────────────────
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+      - "python"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  # ── Go (control-plane, threat-intel, overlay-node) ───────────────────────
+  - package-ecosystem: gomod
+    directory: "/control-plane"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - "deps"
+      - "go"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  - package-ecosystem: gomod
+    directory: "/threat-intel"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - "deps"
+      - "go"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  - package-ecosystem: gomod
+    directory: "/overlay-node"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - "deps"
+      - "go"
+      - "overlay"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  # ── npm / pnpm (dashboard, landing, extension) ───────────────────────────
+  - package-ecosystem: npm
+    directory: "/dashboard"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+      - "typescript"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  - package-ecosystem: npm
+    directory: "/landing"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - "deps"
+      - "landing"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  - package-ecosystem: npm
+    directory: "/extension"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - "deps"
+      - "extension"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  # ── Maven (admin-api Spring Boot) ────────────────────────────────────────
+  - package-ecosystem: maven
+    directory: "/admin-api"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - "deps"
+      - "java"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  # ── NuGet (policy-lsp .NET) ──────────────────────────────────────────────
+  - package-ecosystem: nuget
+    directory: "/policy-lsp"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - "deps"
+      - "dotnet"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  # ── Docker (Dockerfile bases) ────────────────────────────────────────────
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - "deps"
+      - "docker"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  # ── GitHub Actions ───────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+      - "ci"
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope

@@ -1,0 +1,92 @@
+name: ✨ Feature Request
+description: Propose a new capability or improvement.
+title: "feat: <short summary>"
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For large or architectural changes, please open a [discussion](https://github.com/tsm7979/tsm79/discussions) titled `[RFC] <thing>` first — it's a better venue for design conversations than the issue tracker.
+
+        Use this template for concrete, scoped features.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which component does this affect?
+      options:
+        - "dataplane (Rust hot path)"
+        - "detector (Python ML)"
+        - "control-plane (Go)"
+        - "threat-intel (Go)"
+        - "overlay-node (Go libp2p)"
+        - "admin-api (Java Spring Boot)"
+        - "policy-lsp (C# .NET)"
+        - "edge (C++ wasmtime)"
+        - "ebpf-loader / ebpf programs"
+        - "dashboard (Next.js)"
+        - "extension (MV3)"
+        - "landing (static)"
+        - "Docker / compose / deploy"
+        - "observability (ClickHouse / Prometheus)"
+        - "policy DSL"
+        - "sovereign overlay (.tsm)"
+        - "SDK (Python / Node / Go)"
+        - "Cross-cutting"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem is this solving? Who is affected? How often?
+      placeholder: "Operators running multi-region deployments cannot replicate audit ledger between Postgres clusters; today it requires manual logical replication setup."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should we build? Be specific.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you think about? Why is the proposal better?
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope / out-of-scope
+      description: What's IN this feature? What's explicitly OUT?
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: How important is this to you?
+      options:
+        - "Nice to have — would use it eventually"
+        - "Needed — actively blocking my use case"
+        - "Critical — I cannot ship without this"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Mockups, prior art, links to related discussions in other projects.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](../CODE_OF_CONDUCT.md).
+      options:
+        - label: I agree to follow the Code of Conduct
+          required: true

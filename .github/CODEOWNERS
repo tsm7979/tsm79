@@ -1,0 +1,51 @@
+# CODEOWNERS — review routing for TSM79
+#
+# Each line is a pattern followed by one or more owners.
+# Order matters: the LAST matching pattern takes precedence.
+
+# ── Default owner — applies to everything not matched below ─────────────────
+*                              @tsm7979
+
+# ── Hot path (Rust dataplane) — review with the highest care ───────────────
+dataplane/                     @tsm7979
+ebpf/                          @tsm7979
+ebpf-loader/                   @tsm7979
+ebpf-loader-c/                 @tsm7979
+
+# ── ML detector + policy ──────────────────────────────────────────────────
+detector/                      @tsm7979
+proto/                         @tsm7979
+
+# ── Control plane / overlay / companions ──────────────────────────────────
+control-plane/                 @tsm7979
+threat-intel/                  @tsm7979
+overlay-node/                  @tsm7979
+admin-api/                     @tsm7979
+policy-lsp/                    @tsm7979
+edge/                          @tsm7979
+
+# ── Operator surface (dashboard, extension, landing) ──────────────────────
+dashboard/                     @tsm7979
+extension/                     @tsm7979
+landing/                       @tsm7979
+landing-v4/                    @tsm7979
+landing-v5/                    @tsm7979
+
+# ── Infrastructure + deploy ───────────────────────────────────────────────
+docker-compose.enterprise.yml  @tsm7979
+deploy/                        @tsm7979
+observability/                 @tsm7979
+
+# ── Security-sensitive documents — extra eyes ─────────────────────────────
+SECURITY.md                    @tsm7979
+CODE_OF_CONDUCT.md             @tsm7979
+GOVERNANCE.md                  @tsm7979
+
+# ── CI / workflows ────────────────────────────────────────────────────────
+.github/                       @tsm7979
+
+# ── Project root configuration ────────────────────────────────────────────
+Cargo.toml                     @tsm7979
+pyproject.toml                 @tsm7979
+go.mod                         @tsm7979
+package.json                   @tsm7979
