@@ -18,6 +18,7 @@ LIBBPF_HEADERS ?= /usr/include
 CFLAGS := \
     -target bpf \
     -O2 \
+    -g \
     -Wall \
     -Wno-unused-value \
     -Wno-pointer-sign \
@@ -30,7 +31,7 @@ CFLAGS := \
 
 BPF_LOADER_BPF_DIR := ../ebpf-loader/bpf
 
-SRCS := src/ingress.c src/egress.c
+SRCS := src/ingress.c src/egress.c src/xdp_ddos.c src/xdp_ai_filter.c src/tproxy.c src/drop_bypass.c
 OBJS := $(SRCS:src/%.c=build/%.o)
 
 .PHONY: all clean install dirs
@@ -47,9 +48,8 @@ build/%.o: src/%.c src/maps.h
 
 install: all
 	@mkdir -p $(BPF_LOADER_BPF_DIR)
-	@cp build/ingress.o $(BPF_LOADER_BPF_DIR)/ingress.o
-	@cp build/egress.o  $(BPF_LOADER_BPF_DIR)/egress.o
-	@echo "[ebpf] Installed to $(BPF_LOADER_BPF_DIR)"
+	@cp build/*.o $(BPF_LOADER_BPF_DIR)/
+	@echo "[ebpf] Installed all objects to $(BPF_LOADER_BPF_DIR): $(notdir $(OBJS))"
 
 clean:
 	@rm -rf build/

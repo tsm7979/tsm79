@@ -37,14 +37,15 @@
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <net/if.h>
+#include <hiredis/hiredis.h>
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
 
 #define TSM_MAP_PIN_DIR     "/sys/fs/bpf/tsm"
-#define TSM_CIDR_MAP_NAME   "ai_cidrs"
-#define TSM_CTRL_MAP_NAME   "tsm_ctrl"
+#define TSM_CIDR_MAP_NAME   "ai_ips"
+#define TSM_CTRL_MAP_NAME   "tsm_config"
 #define TSM_MAX_CIDRS       4096
-#define TSM_XDP_PROG_NAME   "tsm_ingress"
+#define TSM_XDP_PROG_NAME   "tsm_xdp_ingress"
 #define TSM_VERSION         "1.0.0"
 
 /* ── Data types ──────────────────────────────────────────────────────────── */
@@ -83,6 +84,7 @@ static struct tsm_loader_state {
     struct bpf_link     *link;        /* XDP link handle (prefer over legacy attach) */
     int                  cidr_map_fd;
     int                  ctrl_map_fd;
+    int                  blocklist_map_fd;   /* ip_blocked — synced from Redis */
     int                  ctrl_sock;
     int                  ifindex;
     char                 iface[IFNAMSIZ];
@@ -318,6 +320,73 @@ static void handle_ctrl_msg(int sock, const char *msg, size_t len,
            (const struct sockaddr *)peer, peer_len);
 }
 
+/* ── Redis → ip_blocked sync ──────────────────────────────────────────────────
+ *
+ * threat-intel (Go) writes the Redis HASH `tsm:xdp:blocklist` (field = IPv4
+ * string, value = JSON). We HKEYS it and reconcile the kernel `ip_blocked`
+ * map so every feed entry becomes an XDP_DROP at the NIC driver. The loader
+ * is the sole writer of the BPF maps; threat-intel only touches Redis.
+ * The connection is lazy and self-healing (reconnect on the next tick).
+ */
+static redisContext *g_redis = NULL;
+
+static void redis_connect(void) {
+    const char *host = getenv("TSM_REDIS_HOST"); if (!host || !*host) host = "redis";
+    const char *ps   = getenv("TSM_REDIS_PORT"); int port = (ps && *ps) ? atoi(ps) : 6379;
+    struct timeval tv = { .tv_sec = 2, .tv_usec = 0 };
+    g_redis = redisConnectWithTimeout(host, port, tv);
+    if (!g_redis || g_redis->err) {
+        if (g_redis) { redisFree(g_redis); g_redis = NULL; }
+        return;
+    }
+    const char *pass = getenv("TSM_REDIS_PASSWORD");
+    if (pass && *pass) {
+        redisReply *r = redisCommand(g_redis, "AUTH %s", pass);
+        if (r) freeReplyObject(r);
+    }
+}
+
+static void sync_blocklist_from_redis(int map_fd) {
+    if (map_fd < 0) return;
+    if (!g_redis) { redis_connect(); if (!g_redis) return; }
+
+    redisReply *reply = redisCommand(g_redis, "HKEYS tsm:xdp:blocklist");
+    if (!reply) { redisFree(g_redis); g_redis = NULL; return; }  /* lost conn → retry next tick */
+    if (reply->type != REDIS_REPLY_ARRAY) { freeReplyObject(reply); return; }
+
+    /* 1. Add every current blocklist IP to the kernel ip_blocked map. */
+    unsigned char one = 1;
+    unsigned int added = 0;
+    for (size_t i = 0; i < reply->elements; i++) {
+        struct in_addr a;
+        const char *ipstr = reply->element[i]->str;
+        if (ipstr && inet_pton(AF_INET, ipstr, &a) == 1) {
+            unsigned int ip = (unsigned int)a.s_addr;  /* network byte order — matches ingress saddr */
+            if (bpf_map_update_elem(map_fd, &ip, &one, BPF_ANY) == 0) added++;
+        }
+    }
+
+    /* 2. Reconcile removals: drop kernel entries no longer in the feed.
+     *    Fetch next_key BEFORE deleting current — safe BPF map iteration. */
+    unsigned int key, next_key;
+    int have = (bpf_map_get_next_key(map_fd, NULL, &next_key) == 0);
+    while (have) {
+        key  = next_key;
+        have = (bpf_map_get_next_key(map_fd, &key, &next_key) == 0);
+        char ipbuf[INET_ADDRSTRLEN];
+        struct in_addr a; a.s_addr = key;
+        inet_ntop(AF_INET, &a, ipbuf, sizeof(ipbuf));
+        int still = 0;
+        for (size_t i = 0; i < reply->elements; i++) {
+            if (reply->element[i]->str && strcmp(reply->element[i]->str, ipbuf) == 0) { still = 1; break; }
+        }
+        if (!still) bpf_map_delete_elem(map_fd, &key);
+    }
+
+    log_info("blocklist sync: %u/%zu IPs active in ip_blocked", added, reply->elements);
+    freeReplyObject(reply);
+}
+
 /* ── Main ────────────────────────────────────────────────────────────────── */
 
 static void print_usage(const char *prog) {
@@ -339,6 +408,10 @@ static void print_usage(const char *prog) {
 }
 
 int main(int argc, char *argv[]) {
+    /* Line-buffer stdout so INFO logs flush promptly under a container pipe
+     * (otherwise only the unbuffered stderr WARN/ERROR lines are visible). */
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
     /* ── Defaults ─────────────────────────────────────────────────────────── */
     char obj_path[512]   = "";
     char cidr_file[512]  = "";
@@ -462,6 +535,11 @@ int main(int argc, char *argv[]) {
     state.ctrl_map_fd = open_or_pin_map(state.obj, TSM_CTRL_MAP_NAME, pin_path);
     /* ctrl map is optional — don't fail if not found */
 
+    /* ip_blocked — the XDP_DROP set, synced from threat-intel's Redis feed. */
+    state.blocklist_map_fd = open_or_pin_map(state.obj, "ip_blocked", pin_path);
+    if (state.blocklist_map_fd < 0)
+        log_warn("ip_blocked map not found — Redis blocklist sync disabled");
+
     /* ── Load initial CIDRs ───────────────────────────────────────────────── */
     if (cidr_file[0] != '\0') {
         struct cidr_entry entries[TSM_MAX_CIDRS];
@@ -520,10 +598,14 @@ int main(int argc, char *argv[]) {
 
     log_info("running — send SIGTERM to stop");
 
+    /* Initial blocklist sync, then refresh every ~5s in the loop. */
+    sync_blocklist_from_redis(state.blocklist_map_fd);
+
     /* ── Event loop ───────────────────────────────────────────────────────── */
     char msg_buf[512];
     struct sockaddr_un peer;
     socklen_t peer_len;
+    int sync_tick = 0;
 
     while (state.running) {
         if (state.ctrl_sock >= 0) {
@@ -534,6 +616,10 @@ int main(int argc, char *argv[]) {
                 msg_buf[n] = '\0';
                 handle_ctrl_msg(state.ctrl_sock, msg_buf, (size_t)n, &peer, peer_len);
             }
+        }
+        if (++sync_tick >= 100) {   /* 100 × 50ms ≈ 5s */
+            sync_tick = 0;
+            sync_blocklist_from_redis(state.blocklist_map_fd);
         }
         usleep(50000); /* 50ms poll interval */
     }

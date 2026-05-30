@@ -1,0 +1,14 @@
+[package]
+name = "tsm-edge-worker"
+version = "0.1.0"
+edition = "2021"
+description = "Sample TSM edge worker — compiled to wasm32 and run sandboxed by the C++ edge host"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
+strip = true

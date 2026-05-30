@@ -74,7 +74,7 @@ struct {
     __uint(type,        BPF_MAP_TYPE_ARRAY);
     __uint(key_size,    sizeof(__u32));
     __uint(value_size,  sizeof(__u64));
-    __uint(max_entries, 8);
+    __uint(max_entries, 16);   /* indices 0-9 used across ingress + xdp_ddos */
 } tsm_stats SEC(".maps");
 
 /* Stat map keys */
@@ -101,6 +101,18 @@ struct {
 struct ai_lpm_key {
     __u32 prefixlen;   /* CIDR prefix length (e.g. 24 for /24)               */
     __u32 ip;          /* IPv4 address in network byte order                  */
+};
+
+/* Byte-compatible aliases used by xdp_ddos.c / xdp_ai_filter.c / drop_bypass.c.
+ * `lpm_key` matches `ai_lpm_key` layout (8-byte LPM key); `ip_action` matches
+ * the 1-byte `ai_ips` value. bpf_map_lookup_elem is type-erased, so these
+ * interoperate with the `ai_ips` map by size+layout. */
+struct lpm_key {
+    __u32 prefixlen;
+    __u32 addr;
+};
+struct ip_action {
+    __u8 reason;
 };
 
 /* AI provider reason codes stored as map values */

@@ -5,7 +5,7 @@
 
 CC      ?= gcc
 CFLAGS  := -O2 -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE
-LDFLAGS := -lbpf -lelf -lz
+LDFLAGS := -lbpf -lelf -lz -lhiredis
 
 # BPF kernel programs (compiled with clang)
 CLANG   ?= clang

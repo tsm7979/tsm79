@@ -1,0 +1,41 @@
+# TSM Edge Compute (Layer 4: "C++ + WebAssembly").
+#
+# Runs untrusted, multi-tenant WebAssembly "workers" in a fuel-bounded wasmtime
+# sandbox — the Cloudflare/Fastly Compute@Edge model. Stage 1 compiles a sample
+# worker (Rust → wasm32); stage 2 builds the C++ host against the wasmtime C API.
+# The dataplane will call this per-request in a later phase; here it runs as a
+# self-validating liveness service.
+
+# ── Stage 1: build the Wasm worker (any language that targets Wasm works) ──────
+FROM rust:1-slim AS worker
+WORKDIR /w
+COPY edge/worker/ ./
+RUN rm -rf target \
+    && rustup target add wasm32-unknown-unknown \
+    && cargo build --release --target wasm32-unknown-unknown
+
+# ── Stage 2: build the C++ host against the wasmtime C API ─────────────────────
+FROM ubuntu:24.04 AS host
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        g++ cmake make curl ca-certificates xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+RUN TAG=$(curl -sL https://api.github.com/repos/bytecodealliance/wasmtime/releases/latest \
+            | grep -oE '"tag_name": "v[0-9.]+"' | grep -oE 'v[0-9.]+' | head -1) \
+    && curl -fsSL "https://github.com/bytecodealliance/wasmtime/releases/download/$TAG/wasmtime-$TAG-x86_64-linux-c-api.tar.xz" -o /tmp/wt.tar.xz \
+    && tar -C /opt -xf /tmp/wt.tar.xz \
+    && mv /opt/wasmtime-$TAG-x86_64-linux-c-api /opt/wasmtime-c-api
+WORKDIR /src
+COPY edge/ ./edge/
+# Drop any host-side build artifacts copied in from the context (stale CMake cache).
+RUN rm -rf edge/build edge/worker/target \
+    && cd edge \
+    && cmake -B build -DWASMTIME_DIR=/opt/wasmtime-c-api -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build -j
+
+# ── Stage 3: minimal runtime ───────────────────────────────────────────────────
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 && rm -rf /var/lib/apt/lists/*
+COPY --from=host   /src/edge/build/edge_host                                       /usr/local/bin/edge_host
+COPY --from=worker /w/target/wasm32-unknown-unknown/release/tsm_edge_worker.wasm   /opt/tsm/worker.wasm
+# Liveness service: continuously re-validate the sandbox executes workers correctly.
+CMD ["sh", "-c", "while true; do /usr/local/bin/edge_host /opt/tsm/worker.wasm; sleep 30; done"]

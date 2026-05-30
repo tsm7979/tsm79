@@ -3,6 +3,11 @@ FROM eclipse-temurin:21-jdk-jammy AS build
 
 WORKDIR /build
 
+# mvnw downloads the Maven distribution zip and needs `unzip` to extract it
+# (not present in the minimal temurin jammy image).
+RUN apt-get update && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy Maven wrapper + POM first (layer-cache dependencies)
 COPY .mvn/              .mvn/
 COPY mvnw               mvnw
