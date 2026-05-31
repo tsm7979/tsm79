@@ -9,7 +9,7 @@
 # (run privileged). On Docker Desktop / WSL the container only sees its veth, so
 # attach is best-effort there; the production deploy is deploy/kubernetes/base/
 # ebpf-daemonset.yaml (host network, one loader per node).
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         clang llvm libelf-dev libbpf-dev gcc-multilib libhiredis-dev \

@@ -15,7 +15,7 @@ RUN rm -rf target \
     && cargo build --release --target wasm32-unknown-unknown
 
 # ── Stage 2: build the C++ host against the wasmtime C API ─────────────────────
-FROM ubuntu:24.04 AS host
+FROM ubuntu:26.04 AS host
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         g++ cmake make curl ca-certificates xz-utils \
     && rm -rf /var/lib/apt/lists/*
@@ -33,7 +33,7 @@ RUN rm -rf edge/build edge/worker/target \
     && cmake --build build -j
 
 # ── Stage 3: minimal runtime ───────────────────────────────────────────────────
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 && rm -rf /var/lib/apt/lists/*
 COPY --from=host   /src/edge/build/edge_host                                       /usr/local/bin/edge_host
 COPY --from=worker /w/target/wasm32-unknown-unknown/release/tsm_edge_worker.wasm   /opt/tsm/worker.wasm
