@@ -9,17 +9,17 @@ Request lifecycle:
   1. Read body (4 MB limit, fail-closed on read error)
   2. Forward to Python ML detector (regex + NER + semantic + IsolationForest)
   3. Policy decision from detector response:
-       allow   → forward redacted body to upstream LLM
-       redact  → forward redacted body to upstream LLM
-       block   → return 400 with structured error; upstream never sees the request
-       route_local → forward to Ollama/local LLM if available, else 503
+       allow   -> forward redacted body to upstream LLM
+       redact  -> forward redacted body to upstream LLM
+       block   -> return 400 with structured error; upstream never sees the request
+       route_local -> forward to Ollama/local LLM if available, else 503
   4. Stream upstream response back to client (SSE or JSON)
   5. Audit log entry written
 
 Fail-closed contract:
-  - If detector is unreachable → block request (do not forward raw data)
-  - If upstream LLM is unreachable → return 502 (do not swallow error)
-  - If body exceeds 4 MB → return 413
+  - If detector is unreachable -> block request (do not forward raw data)
+  - If upstream LLM is unreachable -> return 502 (do not swallow error)
+  - If body exceeds 4 MB -> return 413
   - No demo stubs, no fake responses, no conditional fallbacks
 
 Authentication:
@@ -46,60 +46,32 @@ from typing import Any, AsyncIterator
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+
+from tsm import __version__  # single source of truth -- tsm/__init__.py
 from fastapi.responses import JSONResponse, StreamingResponse
 
 logger = logging.getLogger("tsm.proxy")
 
-# ── Deprecation notice ────────────────────────────────────────────────────────
+# Runtime positioning ----------------------------------------------------------
 #
-# tsm/proxy/server.py is the Python implementation of the TSM proxy.
-# It is DEPRECATED in favour of the Rust dataplane (dataplane/src/) which:
+# tsm/proxy/server.py is the REFERENCE IMPLEMENTATION of the TSM proxy and the
+# default runtime today: pure Python, zero system dependencies, runs anywhere
+# Python does. It implements the full inline request path -- detection, policy,
+# fail-closed verdicts, SSE streaming, auth, and rate limiting.
 #
-#   • Uses eBPF TC egress + TPROXY to intercept traffic without code changes
-#   • Achieves <1 ms overhead vs ~5-15 ms for Python async (GIL, interpreter)
-#   • Handles TLS 1.3 termination and re-encryption without buffering full bodies
-#   • Enforces concurrency limits at the OS thread level (no event loop stalls)
-#   • Streams SSE responses without chunking all tokens into one buffer
+# The Rust dataplane (dataplane/src/) is the PRODUCTION TARGET, in active
+# development (GitHub #35, #36). It adds eBPF/TPROXY interception, ONNX
+# inference, JA3/JA4 fingerprinting, and the .tsm overlay at higher throughput.
+# Until it ships a verified build, this Python proxy is the supported path for
+# local development, evaluation, and single-node deployments.
 #
-# Migration path:
-#   1. Build the Rust dataplane:  cd dataplane && cargo build --release
-#   2. Load the eBPF TPROXY hook: bash ebpf/setup-tproxy.sh
-#   3. Start the detector:        docker-compose up detector
-#   4. Start the Rust proxy:      ./target/release/tsm-dataplane
-#   5. Remove TSM_PROXY_URL references and point apps at port 8080 directly.
-#
-# This Python proxy will remain available until Q3 2026 for teams that cannot
-# yet deploy the Rust dataplane.  Set TSM_SUPPRESS_DEPRECATION=1 to silence
-# this warning in environments where migration is already tracked.
+# Set TSM_PROXY_QUIET=1 to silence the one-line startup notice below.
 
-import warnings as _warnings
-
-if not __import__("os").environ.get("TSM_SUPPRESS_DEPRECATION"):
-    _warnings.warn(
-        "\n"
-        "┌─────────────────────────────────────────────────────────────────────┐\n"
-        "│  TSM Python Proxy (tsm/proxy/server.py) is DEPRECATED               │\n"
-        "│                                                                       │\n"
-        "│  Migrate to the Rust dataplane for production use:                   │\n"
-        "│    cd dataplane && cargo build --release                              │\n"
-        "│    bash ebpf/setup-tproxy.sh   # eBPF TPROXY interception            │\n"
-        "│    ./target/release/tsm-dataplane                                     │\n"
-        "│                                                                       │\n"
-        "│  The Rust proxy provides:                                             │\n"
-        "│    • Zero-code-change interception (eBPF TPROXY, no HTTP_PROXY)       │\n"
-        "│    • <1ms overhead vs 5-15ms for Python                               │\n"
-        "│    • TLS 1.3 to upstream with Ed25519-verified policy hot-reload      │\n"
-        "│    • SSE streaming without buffering, Luhn-validated CC detection     │\n"
-        "│                                                                       │\n"
-        "│  Set TSM_SUPPRESS_DEPRECATION=1 to silence this warning.             │\n"
-        "└─────────────────────────────────────────────────────────────────────┘",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    logger.warning(
-        "TSM Python proxy is deprecated — migrate to the Rust dataplane. "
-        "See dataplane/src/main.rs and ebpf/setup-tproxy.sh. "
-        "Set TSM_SUPPRESS_DEPRECATION=1 to silence."
+if not __import__("os").environ.get("TSM_PROXY_QUIET"):
+    logger.info(
+        "TSM Python proxy (reference implementation) v%s starting -- "
+        "Rust dataplane is the production target (see dataplane/, GitHub #35).",
+        __version__,
     )
 
 # ── Config (env-driven, zero hardcoded values) ────────────────────────────────
@@ -124,7 +96,7 @@ _UPSTREAM_URLS = {
 # ── Rate limiter — Redis sliding-window with in-process fallback ─────────────
 #
 # Strategy: fixed-window counter in Redis (key = "tsm:rl:<ip>:<window>").
-# Window = current UTC minute.  One INCR + EXPIRE per request → O(1).
+# Window = current UTC minute.  One INCR + EXPIRE per request -> O(1).
 #
 # Why not token-bucket in Redis?  Token-bucket needs two round-trips (GET+SET)
 # or a Lua script.  Fixed-window with 1-minute granularity is accurate enough
@@ -162,9 +134,9 @@ class _RedisLimiter:
 
     Key schema:  tsm:rl:<ip>:<unix_minute>
     Algorithm:
-      1. INCR the key → atomic counter for this IP in this minute-window
+      1. INCR the key -> atomic counter for this IP in this minute-window
       2. If count == 1 (first request), EXPIRE in 120s (two windows, for safety)
-      3. If count > rpm → rate-limited
+      3. If count > rpm -> rate-limited
     """
     def __init__(self, redis_client, rpm: int) -> None:
         self._redis = redis_client
@@ -236,8 +208,35 @@ _stats = _Stats()
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
-app = FastAPI(title="TSM Proxy", version="2.1.0", docs_url=None, redoc_url=None)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app = FastAPI(title="TSM Proxy", version=__version__, docs_url=None, redoc_url=None)
+# CORS -- secure by default ----------------------------------------------------
+# A security product must not ship allow-all CORS. Default is a localhost
+# allowlist (dev dashboard + dataplane). Operators widen it explicitly via
+# TSM_CORS_ORIGINS (comma-separated). Setting it to "*" re-enables allow-all
+# but is logged loudly and -- per the CORS spec -- disables credentialed requests.
+_cors_env = __import__("os").environ.get("TSM_CORS_ORIGINS", "").strip()
+if _cors_env == "*":
+    _cors_origins, _cors_creds = ["*"], False
+    logger.warning(
+        "TSM_CORS_ORIGINS='*' -- allow-all CORS enabled. Unsafe for a security "
+        "product; set an explicit origin allowlist for any shared deployment."
+    )
+elif _cors_env:
+    _cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+    _cors_creds = True
+else:
+    _cors_origins = [
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "http://localhost:8080", "http://127.0.0.1:8080",
+    ]
+    _cors_creds = True
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_creds,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-TSM-Workspace", "X-TSM-User-Role"],
+)
 
 # Single shared async httpx client — connection-pooled, keep-alive
 _http: httpx.AsyncClient | None = None
@@ -288,7 +287,7 @@ def health():
     return {
         "status":        "healthy",
         "service":       "TSM Proxy",
-        "version":       "2.1.0",
+        "version":       __version__,
         "detector":      _DETECTOR_URL,
         "openai":        bool(_OPENAI_KEY),
         "anthropic":     bool(_ANTHROPIC_KEY),
@@ -459,7 +458,7 @@ def _build_upstream_headers(
 ) -> dict[str, str]:
     headers: dict[str, str] = {
         "Content-Type": "application/json",
-        "User-Agent":   "TSM-Proxy/2.1.0",
+        "User-Agent":   f"TSM-Proxy/{__version__}",
     }
 
     if "anthropic" in upstream_url:
@@ -508,7 +507,7 @@ async def _json_response(
                         media_type="application/json")
 
     # ── Detokenize LLM response when vault_id is present ─────────────────────
-    # The detector tokenized PII in the request (e.g. SSN → tsm_tok_*).
+    # The detector tokenized PII in the request (e.g. SSN -> tsm_tok_*).
     # The LLM may echo those tokens back in its response; swap them back so the
     # end user receives the original values in context.
     if vault_id:
@@ -741,11 +740,11 @@ def start(host: str = "localhost", port: int = 8080, skill: str | None = None, b
     import uvicorn
 
     if not os.environ.get("TSM_HEADLESS"):
-        print(f"\n  TSM Proxy v2.1.0  →  http://{host}:{port}")
-        print(f"  Detector          →  {_DETECTOR_URL}")
-        print(f"  OpenAI key        →  {'✓' if _OPENAI_KEY else '✗ (set OPENAI_API_KEY)'}")
-        print(f"  Anthropic key     →  {'✓' if _ANTHROPIC_KEY else '✗ (set ANTHROPIC_API_KEY)'}")
-        print(f"  Fail-closed       →  yes (detector unavailable = block)\n")
+        print(f"\n  TSM Proxy v{__version__}  ->  http://{host}:{port}")
+        print(f"  Detector          ->  {_DETECTOR_URL}")
+        print(f"  OpenAI key        ->  {'✓' if _OPENAI_KEY else '✗ (set OPENAI_API_KEY)'}")
+        print(f"  Anthropic key     ->  {'✓' if _ANTHROPIC_KEY else '✗ (set ANTHROPIC_API_KEY)'}")
+        print(f"  Fail-closed       ->  yes (detector unavailable = block)\n")
 
     uvicorn.run(app, host=host, port=port, log_level="warning")
 
