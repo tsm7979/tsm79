@@ -37,7 +37,7 @@ Every prompt your application sends to a model is a leak surface — for PII, fo
 |---|---|---|---|
 | **Position** | Post-hoc, on logs | Beside the request | **On the wire** |
 | **Bypassable** | Yes — logs are downstream | Yes — apps can skip the sidecar | **No — the dataplane is the upstream** |
-| **Hot path** | n/a — async | ~30–80 ms (Python/Node sidecar) | **Microseconds (Rust + Aho-Corasick prefilter)** |
+| **Hot path** | n/a — async | ~30–80 ms (Python/Node sidecar) | **~10–30 µs measured (Python ref); sub-10 µs Rust target** |
 | **Detection escalation** | None — single pass | None — single pass | **5-stage: regex → entropy → structural → ONNX → NER → quarantine** |
 | **Quarantine verdict** | Logs only | Block or allow | **`202` for human review — fail-secure** |
 | **Audit** | Application logs | Sidecar's own log | **Tamper-evident Merkle chain in Postgres** |
@@ -77,24 +77,36 @@ What gets caught on the local fast path:
 | Names, organisations, locations | spaCy NER (via gRPC escalation) | `medium` |
 | Ambiguous PII (NER signal, no fast-path hit) | ONNX heuristic → gRPC escalation → **quarantine** | varies |
 
-When the fast path is uncertain, escalation goes to the Python detector over gRPC. The Rust core stays microsecond for the clean case.
+When the fast path is uncertain, escalation goes to the Python detector over gRPC. The Python reference path adds ~10-30 µs per request (measured, see [Performance](#performance)); the Rust core targets sub-10 µs.
 
 ---
 
 ## Performance
 
-Numbers from the in-tree benchmark harness on a single x86_64 host (Intel Xeon Silver 4314, 1 CPU pinned, no NUMA crossings):
+TSM's job is to guard a model call *without* adding meaningful latency. The number that matters is **added overhead** -- how long the inline detection (`PIIDetector.scan`) takes per request. Upstream model latency (hundreds of ms) is unaffected.
 
-| Workload | Throughput | p50 | p99 |
-|---|---|---|---|
-| Clean prompt — fast path | **42,000 req/s** | 18 µs | 64 µs |
-| Critical secret — fast path block | **38,000 req/s** | 22 µs | 71 µs |
-| Ambiguous → ONNX heuristic | 8,400 req/s | 0.96 ms | 2.1 ms |
-| Ambiguous → gRPC escalation → quarantine | 1,200 req/s | 6.4 ms | 11.8 ms |
+### Measured today -- Python reference implementation
 
-The dataplane is the only component on the hot path. Detector, audit, analytics, and overlay are all async or escalated-only.
+Reproduce in one command, no setup:
 
----
+```bash
+python benchmark/bench.py
+```
+
+Real numbers (Windows 11, CPython 3.12, single thread, AMD 16-core; 10,000 iters/category):
+
+| Category | p50 (µs) | p99 (µs) | mean (µs) | req/s (1 core) | severity |
+|---|---:|---:|---:|---:|---|
+| clean prompt | 9.7 | 30.5 | 11.2 | 89,184 | none |
+| secret | 12.4 | 35.6 | 14.2 | 70,303 | critical (blocked) |
+| PII | 21.6 | 50.2 | 24.0 | 41,601 | critical / medium |
+| mixed (PII + secret) | 27.3 | 56.7 | 30.2 | 33,073 | critical |
+
+Aggregate **19.9 µs mean added latency, ~50,000 req/s on a single core**. Every run writes a machine fingerprint, p50/p90/p99 percentiles, and the severity distribution to [`benchmark/RESULTS.md`](benchmark/RESULTS.md) -- so any number is traceable to the box that produced it. Methodology: [`benchmark/`](benchmark/).
+
+### Design targets -- Rust dataplane
+
+The Rust dataplane (`dataplane/`) targets a higher tier: sub-10 µs fast-path detection and 100k+ req/s per core via an Aho-Corasick prefilter and a `RegexSet` SIMD DFA. **These are design targets, not measured results.** The dataplane build is being unblocked ([#36](https://github.com/tsm7979/tsm79/issues/36)); once green it is benchmarked by the same harness and these numbers are replaced with measurements.
 
 ## 90-Second Quickstart
 
