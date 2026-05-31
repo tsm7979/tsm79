@@ -173,14 +173,18 @@ jobs:
       - validate-compose
     steps:
       - name: Verify required jobs succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "results: ${{ join(needs.*.result, ', ') }}"
-          for r in ${{ join(needs.*.result, ' ') }}; do
-            if [ "$r" != "success" ]; then
-              echo "::error::a required check did not succeed: $r"
-              exit 1
-            fi
+          echo "results: ${RESULTS}"
+          ok=1
+          for r in ${RESULTS}; do
+            [ "$r" = "success" ] || ok=0
           done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::a required check did not succeed (results: ${RESULTS})"
+            exit 1
+          fi
           echo "All required checks passed."
 
   # ════════════════════════════════════════════════════════════════════════════
