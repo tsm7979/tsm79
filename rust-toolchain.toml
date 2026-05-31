@@ -1,0 +1,21 @@
+# Pinned Rust toolchain for the dataplane and related Rust crates.
+#
+# Why pin: rustc 1.95.0 produces an internal compiler error when building
+# the dataplane crate (see GH issue #36). Until upstream is fixed, the
+# workspace builds against the last known-good stable.
+#
+# Bumping this:
+#   1. Verify `cargo build --workspace` and `cargo test --workspace` are
+#      green on the candidate toolchain
+#   2. Update this file
+#   3. Update docs/RUST_TOOLCHAIN.md if the rationale changes
+#   4. Close GH issue #36 if upstream fixed the ICE; reference the upstream
+#      rust-lang/rust PR in the close message
+#
+# Contributors: rustup will install this toolchain automatically the first
+# time you run any cargo command in this workspace.
+
+[toolchain]
+channel = "1.94.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
