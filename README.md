@@ -93,16 +93,16 @@ Reproduce in one command, no setup:
 python benchmark/bench.py
 ```
 
-Real numbers (Windows 11, CPython 3.12, single thread, AMD 16-core; 10,000 iters/category):
+Real numbers — copied verbatim from [`benchmark/RESULTS.md`](benchmark/RESULTS.md) (Windows 11, CPython 3.12, AMD 16-core, single thread, 10,000 iters/category):
 
-| Category | p50 (µs) | p99 (µs) | mean (µs) | req/s (1 core) | severity |
-|---|---:|---:|---:|---:|---|
-| clean prompt | 9.7 | 30.5 | 11.2 | 89,184 | none |
-| secret | 12.4 | 35.6 | 14.2 | 70,303 | critical (blocked) |
-| PII | 21.6 | 50.2 | 24.0 | 41,601 | critical / medium |
-| mixed (PII + secret) | 27.3 | 56.7 | 30.2 | 33,073 | critical |
+| Category | p50 (µs) | p90 (µs) | p99 (µs) | severity mix |
+|---|---:|---:|---:|---|
+| clean | 10.9 | 159.5 | 203.5 | none |
+| secret | 14.3 | 167.8 | 213.0 | critical (blocked) |
+| PII | 24.4 | 169.9 | 228.1 | critical / medium / none |
+| mixed (PII + secret) | 151.0 | 170.8 | 228.8 | critical |
 
-Aggregate **19.9 µs mean added latency, ~50,000 req/s on a single core**. Every run writes a machine fingerprint, p50/p90/p99 percentiles, and the severity distribution to [`benchmark/RESULTS.md`](benchmark/RESULTS.md) -- so any number is traceable to the box that produced it. Methodology: [`benchmark/`](benchmark/).
+The **p50 is ~11–24 µs** for the common cases — that is the added cost per request at the median. The p90/p99 tails are wide because this run shares a loaded desktop (background load shows up in the tail, not the median); on a dedicated core the tails tighten. Every run writes a machine fingerprint, full percentiles, and the severity distribution to [`benchmark/RESULTS.md`](benchmark/RESULTS.md) — so any number here is traceable to the box that produced it, and you should expect *your* numbers to differ. Methodology: [`benchmark/`](benchmark/).
 
 ### Design targets -- Rust dataplane
 
