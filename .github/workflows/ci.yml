@@ -183,7 +183,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Honours rust-toolchain.toml at the repo root (pinned to 1.94.0
+      # while we wait on the rustc 1.95.0 ICE upstream fix — see #36).
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy, rustfmt
 
@@ -397,7 +399,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Honours rust-toolchain.toml at the repo root (pinned to 1.94.0
+      # while we wait on the rustc 1.95.0 ICE upstream fix — see #36).
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy, rustfmt
 
