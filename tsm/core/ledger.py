@@ -181,3 +181,6 @@ class TrustLedger:
                 return last.get("hash", self.GENESIS)
         except Exception:
             return self.GENESIS
+
+# Backwards-compatible alias (tsm.core.__init__ + external imports).
+AuditLedger = TrustLedger
