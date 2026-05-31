@@ -7,6 +7,34 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [3.1.0] — 2026-05-30
+
+### Repository — focus on the data plane
+
+This repository now contains only the **core infrastructure**: the Rust dataplane, the Python ML detector, the Go control-plane / threat-intel / overlay-node, the Java admin-api, the .NET policy-lsp, the C++ wasmtime edge worker host, the eBPF/XDP loader pair, the SDK (`tsm/`), the operator CLI (`tsm-ctl/`), the protobuf contracts, and the production deployment + observability + tests.
+
+The following surfaces moved out so the data plane is what visitors see first:
+
+- `dashboard/` — the Next.js operator UI
+- `extension/` — the MV3 browser front-door for the `.tsm` overlay
+- `landing/`, `landing-v4/`, `landing-v5/` — public marketing surfaces (the live landing remains at <https://www.thesovereignmechanica.ai/>)
+- `proxy/`, `proxy-go/` — legacy proxy implementations superseded by `dataplane/`
+- `sdk/` — duplicate of `tsm/`; consolidated into `tsm/`
+- `tsm_firewall.egg-info/`, `tsm_audit.jsonl` — Python build / runtime artefacts
+- `Dockerfile.dashboard`, `Dockerfile.proxy`, `start-all.sh` — references for removed components
+
+These removals strip ~111 tracked files from the repo. The history of every removed surface is preserved on the `wip/crash-recovery-2026-05-21` branch on origin. Companion repositories for the dashboard, extension, and landing will be published separately as they reach v1.
+
+### Docker compose
+
+- `docker-compose.enterprise.yml` — dashboard service removed; nginx no longer depends on dashboard. Operators deploying the companion dashboard should add it back per its own README.
+
+### Documentation
+
+- README repo layout, CONTRIBUTING repo layout, SECURITY in-scope list, ROADMAP, dependabot ecosystems, CODEOWNERS, PR template scope checklist, bug_report / feature_request component pickers, docs/DEPLOY service table, docs/OBSERVABILITY health-check list — all updated to reflect the data-plane-focused layout.
+
+---
+
 ## [3.0.0] — 2026-05-30
 
 ### Polyglot stack expansion

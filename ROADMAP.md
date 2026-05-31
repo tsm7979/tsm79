@@ -4,16 +4,16 @@ The public roadmap. Dates are intent, not commitment.
 
 ## Now — Q2 2026 (shipping)
 
-- **Polyglot stack v3.0** — Rust dataplane, Python ML detector, Go control-plane / threat-intel / overlay-node, Java admin-api, .NET policy-lsp, C++ wasmtime edge, eBPF/XDP packet authority, TypeScript dashboard, MV3 extension. **Done — landed on `main`.**
-- **Sovereign overlay (`.tsm`) — slice 1 + 2** — self-certifying names, signed `NameRecord`, base32 derive_address, local resolver with anti-hijack + anti-replay, `/_tsm/<name>` gateway, Go libp2p DHT node, MV3 browser extension front-door. **Done.**
-- **Cinematic landing v5 (LIVE)** — WebGL backdrop, 3-mesh scroll-tied crossfade, OFL-only typography, mailto CTAs. <https://www.thesovereignmechanica.ai/>. **Done.**
+- **Polyglot stack v3.0** — Rust dataplane, Python ML detector, Go control-plane / threat-intel / overlay-node, Java admin-api, .NET policy-lsp, C++ wasmtime edge, eBPF/XDP packet authority. **Done — landed on `main`.**
+- **Sovereign overlay (`.tsm`) — slice 1 + 2** — self-certifying names, signed `NameRecord`, base32 derive_address, local resolver with anti-hijack + anti-replay, `/_tsm/<name>` gateway, Go libp2p DHT node. **Done.**
+- **Public landing** — <https://www.thesovereignmechanica.ai/> — **live.** Source lives in a companion repository to keep this repo data-plane-focused.
 
 ## Next — Q3 2026
 
 - **#28 — Wire dataplane → gRPC + edge on request path.** Wasm edge call from the dataplane, completing the C++/V8 + WebAssembly edge-compute slice.
 - **#31 — rustc 1.95.0 ICE workaround on dataplane test/dev builds.** Pin a known-good toolchain or upstream a minimal repro to rust-lang.
 - **#35 — Multi-node DHT mesh test.** docker network + 2 `tsm-overlay-node` peers, cross-implementation propagation verified end-to-end through libp2p Kademlia.
-- **Quarantine UI in the dashboard.** Review queue, decision audit, human-in-the-loop reinforcement signal back into the detector.
+- **Quarantine review API.** The dataplane already emits `202` for quarantined requests; expose a stable admin-api endpoint for the human-review queue so the companion dashboard can render it.
 - **Per-tenant rule import/export.** Operators move policy across workspaces with one CLI command, signed bundles.
 - **SDK polish.** Stabilise the Python SDK; add Node and Go SDKs to parity.
 

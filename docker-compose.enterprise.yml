@@ -407,40 +407,15 @@ services:
       start_period: 15s
     logging: *logging
 
-  # ── Next.js Dashboard ────────────────────────────────────────────────────────
-  dashboard:
-    build:
-      context: .
-      dockerfile: Dockerfile.dashboard
-    <<: *restart
-    environment:
-      NEXT_PUBLIC_PROXY_URL:     "${TSM_EXTERNAL_URL:-http://localhost:8080}"
-      NEXT_PUBLIC_ADMIN_API_URL: "${TSM_ADMIN_URL:-http://localhost:9090}"
-      # Next.js standalone binds to $HOSTNAME; without this it binds the container
-      # hostname (network IP only) and the loopback healthcheck is refused.
-      HOSTNAME: "0.0.0.0"
-      PORT: "3001"
-    networks:
-      - tsm-internal
-    depends_on:
-      dataplane:
-        condition: service_healthy
-      admin-api:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001 || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-    logging: *logging
-
   # ── Nginx Reverse Proxy ──────────────────────────────────────────────────────
   # TLS termination, routing, rate limiting at the edge.
   # Routes:
-  #   /                 → dashboard:3001
   #   /v1/              → dataplane:8080  (AI proxy)
   #   /api/             → admin-api:9090  (enterprise REST API)
   #   /cp/              → control-plane:9091 (internal — restricted to admin token)
+  #
+  # The companion operator dashboard (Next.js) lives in a separate repository.
+  # When deploying it, add a route here from `/` → dashboard:3001.
   nginx:
     image: nginx:1.25-alpine
     <<: *restart
@@ -458,8 +433,6 @@ services:
       dataplane:
         condition: service_healthy
       admin-api:
-        condition: service_healthy
-      dashboard:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health || exit 1"]

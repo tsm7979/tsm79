@@ -81,43 +81,6 @@ updates:
       prefix: "chore(deps)"
       include: scope
 
-  # ── npm / pnpm (dashboard, landing, extension) ───────────────────────────
-  - package-ecosystem: npm
-    directory: "/dashboard"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    labels:
-      - "deps"
-      - "typescript"
-    commit-message:
-      prefix: "chore(deps)"
-      include: scope
-
-  - package-ecosystem: npm
-    directory: "/landing"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 3
-    labels:
-      - "deps"
-      - "landing"
-    commit-message:
-      prefix: "chore(deps)"
-      include: scope
-
-  - package-ecosystem: npm
-    directory: "/extension"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 3
-    labels:
-      - "deps"
-      - "extension"
-    commit-message:
-      prefix: "chore(deps)"
-      include: scope
-
   # ── Maven (admin-api Spring Boot) ────────────────────────────────────────
   - package-ecosystem: maven
     directory: "/admin-api"

@@ -2,7 +2,7 @@
 
 Production deployment guide for the TSM79 enterprise stack.
 
-This document covers the canonical compose deployment. For Kubernetes, see the Helm chart in `deploy/helm/` (when published). For the marketing landing, see `landing-v5/` and the Cloudflare tunnel config — the landing is independent of the data plane.
+This document covers the canonical compose deployment. For Kubernetes, see the Helm chart in `deploy/helm/` (when published). The operator dashboard and public landing live in companion repositories.
 
 ---
 
@@ -12,7 +12,7 @@ This document covers the canonical compose deployment. For Kubernetes, see the H
 |---|---|---|---|
 | **Lab** | < 10 rps | 1 | 2 vCPU, 4 GB RAM, 20 GB SSD — runs everything in a single compose stack |
 | **Small** | 10–500 rps | 1 | 8 vCPU, 16 GB RAM, 100 GB NVMe — single host, all services |
-| **Medium** | 500–5,000 rps | 3 | dataplane on dedicated host; detector + observability co-resident; admin-api + dashboard + Postgres on the third |
+| **Medium** | 500–5,000 rps | 3 | dataplane on dedicated host; detector + observability co-resident; admin-api + Postgres on the third |
 | **Large** | > 5,000 rps | 6+ | per-component pools, ClickHouse cluster, Postgres replicated |
 
 Dataplane is the only hot-path component. Scale it horizontally first.
@@ -39,7 +39,6 @@ Eleven services come up:
 | `threat-intel` | `:8090` | Go — IP reputation feeds |
 | `admin-api` | `:8088` | Java Spring Boot — operator REST control |
 | `policy-lsp` | (unix socket) | C# .NET — policy DSL language server for editors |
-| `dashboard` | `:3000` | Next.js — operator UI |
 | `postgres` | `:5432` | Audit ledger + Merkle chain + workspace store |
 | `clickhouse` | `:8123`, `:9000` | Analytics ingest |
 | `redis` | `:6379` | Rate limit + session pinning |
@@ -164,25 +163,6 @@ Audit-ledger migrations are applied automatically on `admin-api` startup. Postgr
 - [ ] All container images digest-pinned (not `latest`)
 - [ ] Workspace API keys distributed via secret-manager, not in chat
 - [ ] No `:8080` exposed to the public internet (front with mTLS or your gateway)
-
----
-
-## Cloudflare named-tunnel deploy for the landing only
-
-The landing (`landing-v5/`) is a static site served by `python -m http.server 3000` and fronted by a Cloudflare named tunnel:
-
-```bash
-# one-time tunnel setup
-cloudflared tunnel login
-cloudflared tunnel create tsm-landing
-# write ~/.cloudflared/config.yml with the route mapping
-
-# run as a service
-cloudflared service install
-cloudflared tunnel run tsm-landing
-```
-
-The landing is independent of the data plane. Do not point a Cloudflare tunnel at the dataplane HTTP port — front the dataplane with mTLS instead.
 
 ---
 

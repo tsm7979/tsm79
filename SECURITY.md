@@ -8,7 +8,7 @@ TSM79 is security-critical infrastructure. We take vulnerability reports serious
 
 Email <founder@thesovereignmechanica.ai> with:
 
-- Affected component (dataplane, detector, control-plane, admin-api, overlay-node, edge, dashboard, landing, extension, eBPF loader, …)
+- Affected component (dataplane, detector, control-plane, admin-api, overlay-node, edge, eBPF loader, SDK / CLI, …)
 - Affected version or commit SHA
 - A description of the vulnerability, including the impact you observed
 - Reproduction steps — minimal, deterministic
@@ -38,11 +38,10 @@ We follow [coordinated disclosure](https://en.wikipedia.org/wiki/Coordinated_vul
 
 ## In-Scope
 
-- All code in this repository (`dataplane/`, `detector/`, `control-plane/`, `threat-intel/`, `admin-api/`, `policy-lsp/`, `edge/`, `overlay-node/`, `ebpf-loader/`, `ebpf-loader-c/`, `dashboard/`, `extension/`, `landing-v4/`, `landing-v5/`)
+- All code in this repository (`dataplane/`, `detector/`, `control-plane/`, `threat-intel/`, `admin-api/`, `policy-lsp/`, `edge/`, `overlay-node/`, `ebpf-loader/`, `ebpf-loader-c/`, `tsm/`, `tsm-ctl/`)
 - The published Docker images
 - The default `docker-compose.enterprise.yml` topology
 - The sovereign-overlay protocol (`.tsm` namespace, signing-byte format, DHT propagation)
-- The marketing landing at <https://www.thesovereignmechanica.ai/>
 
 ## Out-of-Scope
 
@@ -51,7 +50,7 @@ We follow [coordinated disclosure](https://en.wikipedia.org/wiki/Coordinated_vul
 - Findings that require physical access to the host
 - Theoretical timing attacks without a working PoC
 - Vulnerabilities only reachable by a privileged on-host attacker
-- Test fixtures, demo data, and the in-browser "Inspect a prompt" widget on the landing — these contain intentionally synthetic secrets (e.g., `ghp_DEMO_FIXTURE_…`, `AKIA_DEMO_FIXTURE_AB`) so visitors can observe detection in action
+- Test fixtures and demo data anywhere in the repo — these contain intentionally synthetic secrets (e.g., `ghp_DEMO_FIXTURE_…`, `AKIA_DEMO_FIXTURE_AB`) so the detection regex set can be exercised in unit tests without colliding with GitHub Push Protection
 
 ## Security Hardening Defaults
 

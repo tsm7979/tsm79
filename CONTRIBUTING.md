@@ -25,10 +25,9 @@ overlay-node/      Go (libp2p) — sovereign-overlay DHT node
 ebpf-loader/       Rust — XDP/TC loader (Aya variant)
 ebpf-loader-c/     C — XDP/TC loader (libbpf variant)
 ebpf/              eBPF/XDP — packet-authority programs
-dashboard/         TypeScript (Next.js) — operator UI
-landing-v5/        static — public landing (deployed)
-extension/         MV3 — browser front-door for the .tsm overlay
-proto/             Protobufs (dataplane↔detector gRPC)
+tsm/               Python — SDK + CLI
+tsm-ctl/           Rust — operator CLI
+proto/             Protobufs (dataplane↔detector + dataplane↔edge gRPC)
 observability/     ClickHouse schema + Rust ingestor
 deploy/            Postgres migrations + nginx config
 docs/              Technical deep-dives
@@ -106,7 +105,7 @@ pytest
 # Go (control-plane, threat-intel, overlay-node)
 go test ./...
 
-# JavaScript / TypeScript (dashboard, landing, extension)
+# TypeScript (only if you're contributing to companion repos)
 pnpm test
 ```
 
@@ -167,7 +166,7 @@ A maintainer merges via squash. The squash commit message is the PR title + body
 - Performance regressions caught — and fixed
 - Docs that turn implicit knowledge into explicit prose
 - New `.tsm` overlay use cases
-- Better landing-page typography and motion
+- New language SDKs (Ruby, Java, Kotlin, C#)
 
 ## Voice
 

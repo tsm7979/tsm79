@@ -136,9 +136,10 @@ Eleven services, eight languages. Each layer in the language that earns its plac
 | `edge/` | C++ (wasmtime) | Sandboxed Wasm worker host — memory ceiling, epoch, fuel |
 | `ebpf-loader/` | Rust (Aya) | XDP/TC loader — kernel-level packet authority |
 | `ebpf-loader-c/` | C (libbpf) | XDP/TC loader (default in CI) |
-| `dashboard/` | TypeScript (Next.js) | Operator UI |
-| `extension/` | MV3 (TypeScript) | Browser front-door for the `.tsm` overlay |
-| `landing-v5/` | static (WebGPU) | Public landing — [LIVE](https://www.thesovereignmechanica.ai/) |
+| `tsm/` | Python | SDK + CLI |
+| `tsm-ctl/` | Rust | Operator CLI |
+
+The operator dashboard, browser extension, and public landing site live in separate companion repositories so this repo stays focused on the data-plane and detection core. The live landing is at <https://www.thesovereignmechanica.ai/>.
 
 [Full architecture →](ARCHITECTURE.md)
 
@@ -173,11 +174,9 @@ An ICANN-free namespace that rides on top of the existing internet — Tor / IPF
 ├── ebpf-loader/       Rust — XDP/TC loader (Aya variant)
 ├── ebpf-loader-c/     C — XDP/TC loader (libbpf variant, default in CI)
 ├── ebpf/              eBPF/XDP C — packet-authority programs
-├── dashboard/         TypeScript (Next.js) — operator UI
-├── landing-v4/        static — brand-correct sovereign landing kit
-├── landing-v5/        static — cinematic upgrade (LIVE)
-├── extension/         MV3 — browser front-door for the .tsm overlay
-├── proto/             Protobufs (dataplane↔detector gRPC)
+├── tsm/               Python — SDK + CLI
+├── tsm-ctl/           Rust — operator CLI
+├── proto/             Protobufs (dataplane↔detector gRPC + dataplane↔edge gRPC)
 ├── observability/     ClickHouse schema + Rust ingestor
 ├── deploy/            Postgres migrations + nginx config
 ├── docs/              Technical deep-dives (OVERLAY, DEPLOY, POLICY, OBSERVABILITY, THREAT_MODEL, SDK)

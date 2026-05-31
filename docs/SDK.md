@@ -218,7 +218,7 @@ Errors map predictably across all SDK forms:
 
 | Form | Status | Notes |
 |---|---|---|
-| HTTP (drop-in) | **stable** | Production-ready, used by the landing demo |
+| HTTP (drop-in) | **stable** | Production-ready, OpenAI-compatible base URL swap |
 | Python SDK | **beta** | API surface stable; polish ongoing |
 | gRPC | **stable** | Contract frozen; cross-implementation parity tested |
 | Node SDK | **planned** | Q3 2026 |

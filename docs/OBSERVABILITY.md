@@ -285,7 +285,6 @@ Each service exposes `/health` (200 if healthy, 503 if not):
 - `dataplane:8080/health` — checks detector connectivity, Redis, Postgres, ClickHouse
 - `detector-grpc` — gRPC health-check (`grpc.health.v1`)
 - `admin-api:8088/actuator/health` — Spring Boot Actuator
-- `dashboard:3000/api/health` — Next.js endpoint
 - `overlay-node:9001/health` — DHT peer count, libp2p listener state
 
 Compose healthchecks already wire these up. For Kubernetes, use `livenessProbe` and `readinessProbe` on the same paths.

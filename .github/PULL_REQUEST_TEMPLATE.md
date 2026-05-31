@@ -28,9 +28,8 @@ Link to the issue or discussion this PR addresses.
 - [ ] `policy-lsp/` (C# .NET)
 - [ ] `edge/` (C++ wasmtime)
 - [ ] `ebpf/` / `ebpf-loader/` / `ebpf-loader-c/` (eBPF / loader)
-- [ ] `dashboard/` (Next.js)
-- [ ] `extension/` (MV3)
-- [ ] `landing*/` (static)
+- [ ] `tsm/` (Python SDK + CLI)
+- [ ] `tsm-ctl/` (Rust operator CLI)
 - [ ] `proto/` (gRPC contract)
 - [ ] `observability/` (ClickHouse / Prometheus)
 - [ ] `deploy/` (Postgres migrations / nginx)
@@ -83,7 +82,7 @@ the threat model implications here.
 
 ## Screenshots / Demos
 
-<!-- For UI changes (dashboard, landing, extension). -->
+<!-- For CLI changes (tsm, tsm-ctl) or visible output. -->
 
 ## Checklist
 

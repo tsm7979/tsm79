@@ -24,12 +24,9 @@ admin-api/                     @tsm7979
 policy-lsp/                    @tsm7979
 edge/                          @tsm7979
 
-# ── Operator surface (dashboard, extension, landing) ──────────────────────
-dashboard/                     @tsm7979
-extension/                     @tsm7979
-landing/                       @tsm7979
-landing-v4/                    @tsm7979
-landing-v5/                    @tsm7979
+# ── SDK + CLI surfaces ────────────────────────────────────────────────────
+tsm/                           @tsm7979
+tsm-ctl/                       @tsm7979
 
 # ── Infrastructure + deploy ───────────────────────────────────────────────
 docker-compose.enterprise.yml  @tsm7979
