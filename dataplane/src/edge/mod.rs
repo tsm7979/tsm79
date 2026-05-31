@@ -44,8 +44,10 @@
 
 pub mod client;
 pub mod config;
+pub mod integration;
 pub mod verdict;
 
 pub use client::EdgeClient;
 pub use config::EdgeConfig;
+pub use integration::{reconcile_for_request, EdgeOutcome, PipelineContext};
 pub use verdict::{EdgeVerdict, ReconciledVerdict};
