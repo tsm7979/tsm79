@@ -169,6 +169,8 @@ _WEIGHTS = {
     "EMAIL": 4.0, "PHONE": 5.0, "IP_ADDRESS": 3.0,
     "DATE_OF_BIRTH": 5.5,
     "JAILBREAK": 10.0,
+    "KNOWN_BAD": 10.0,        # reputation hit on a known-bad signature
+    "OBFUSCATION": 4.5,       # evasion machinery present (signal, not verdict alone)
     "HIGH_ENTROPY_SECRET": 7.5,
     "JWT_TOKEN": 8.0,
     "LLM_SENSITIVE": 6.0,
@@ -274,6 +276,21 @@ class Classifier:
                     "redacted": False,
                 })
         except Exception:  # normalization must never break the core scan path
+            pass
+
+        # ── Reputation DB (Layer 5: hashed known-bad) ─────────────────────────
+        # Exact + canonical (normalized) hash match against the known-bad set,
+        # so obfuscated replays of a known jailbreak still hit. Deterministic.
+        try:
+            from detector.reputation import check_reputation
+            rep = check_reputation(text)
+            if rep.matched and not any(f.get("type") == "KNOWN_BAD" for f in findings):
+                findings.append({
+                    "type": "KNOWN_BAD", "severity": rep.severity or "critical",
+                    "context": f"reputation hit: {rep.kind}/{rep.entry_id} ({rep.match_type})",
+                    "redacted": False,
+                })
+        except Exception:  # reputation must never break the core scan path
             pass
 
         pii_types = list({f["type"] for f in findings})
