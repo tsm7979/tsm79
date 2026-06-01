@@ -40,10 +40,10 @@ THREAT_POLICY_BYPASS  = "policy_bypass"      # LLM acknowledges bypassing safety
 # Credentials the LLM might hallucinate (these are real-looking patterns)
 _CREDENTIAL_RE = re.compile(
     r"""(
-        sk-[A-Za-z0-9\-]{20,}                   |  # OpenAI key
+        sk-(?:proj-)?[A-Za-z0-9_\-]{20,}        |  # OpenAI key (incl. underscores)
         sk-ant-api\d{2}-[A-Za-z0-9_\-]{40,}     |  # Anthropic key
-        ghp_[A-Za-z0-9]{36,}                    |  # GitHub PAT
-        AKIA[0-9A-Z]{16}                         |  # AWS access key
+        (?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,} |  # GitHub token (incl. underscores)
+        AKIA[0-9A-Z_]{16,}                       |  # AWS access key
         -----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY----  |  # PEM key block
         [A-Za-z0-9+/]{40,}={0,2}(?:\s+[A-Za-z0-9+/]{40,}={0,2}){2,}  # multi-line base64
     )""",
@@ -240,6 +240,34 @@ class OutputInspector:
                     risk_score=40.0,
                     spans=[],
                 )
+
+        # 6. Encoded-payload sweep (bidirectional membrane). A model can leak a
+        #    secret hidden inside a base64/hex blob that the literal credential
+        #    regex above never sees. Decode via the normalizer, then run the
+        #    decoded text through the FULL ingress classifier (whose patterns
+        #    already cover underscore-bearing keys, JWTs, etc.). If a critical
+        #    secret is hiding in there, block the response.
+        try:
+            from detector.normalize import normalize
+            norm = normalize(text)
+            if norm.decoded_segments:
+                from detector.classifier import get_classifier
+                clf = get_classifier()
+                for seg in norm.decoded_segments:
+                    sr = clf.scan(seg)
+                    crit = [t for t in sr.pii_types
+                            if t not in ("OBFUSCATION",)] if sr.severity in ("critical", "high") else []
+                    if crit:
+                        return OutputInspectResult(
+                            threat="credential_gen",
+                            technique="encoded_secret_in_output",
+                            evidence=f"secret hidden in encoded payload (decoded): {','.join(crit)}",
+                            redacted=None,  # secret in output: block
+                            risk_score=92.0,
+                            spans=[],
+                        )
+        except Exception:  # egress sweep must never break the response path
+            pass
 
         return OutputInspectResult(threat=THREAT_NONE, risk_score=0.0)
 
