@@ -322,16 +322,29 @@ impl OnnxEngine {
             };
         }
 
+        // Known secret prefixes: a structured key is a secret regardless of
+        // entropy. Low-entropy keys (e.g. sk-proj-TEST_FIXTURE_..., where the
+        // body is dictionary words) would slip past a pure entropy gate, so
+        // check the prefixes the pattern layer recognises.
+        const SECRET_PREFIXES: &[&str] = &[
+            "sk-", "sk-proj-", "sk-ant-", "ghp_", "gho_", "ghu_", "ghs_", "ghr_",
+            "github_pat_", "AKIA", "AGPA", "AIDA", "AROA", "ASIA",
+            "xoxb-", "xoxp-", "glpat-", "-----BEGIN",
+        ];
+        let has_secret_prefix = text.split_whitespace().any(|tok| {
+            SECRET_PREFIXES.iter().any(|p| tok.starts_with(p)) && tok.len() >= 12
+        });
+
         // Check for high-entropy secrets
         let has_high_entropy = text.split_whitespace().any(|tok| {
             tok.len() >= 20 && shannon_entropy(tok.as_bytes()) > 4.5
         });
 
-        if has_high_entropy {
+        if has_secret_prefix || has_high_entropy {
             return OnnxVerdict {
                 label:      SecurityLabel::SecretExposure,
-                confidence: 0.75,
-                risk_score: 0.75 * SecurityLabel::SecretExposure.base_risk(),
+                confidence: if has_secret_prefix { 0.80 } else { 0.75 },
+                risk_score: 0.78 * SecurityLabel::SecretExposure.base_risk(),
                 logits:     [0.0, 0.0, 0.0, 3.0],
                 latency_us: elapsed_us(t0),
             };

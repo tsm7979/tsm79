@@ -275,6 +275,23 @@ impl Detector {
             };
         }
 
+        // Confirmed credential/secret: always block, regardless of composite
+        // score. A leaked key/token cannot be safely "redacted and forwarded" —
+        // the request must be refused at the gate. (A lone OpenAI key scores
+        // 76.8, just under RISK_BLOCK, but it is categorically block-worthy.)
+        const SECRET_TYPES: &[&str] = &[
+            "OPENAI_KEY", "ANTHROPIC_KEY", "AWS_KEY", "STRIPE_KEY",
+            "GITHUB_TOKEN", "PRIVATE_KEY", "JWT_TOKEN",
+        ];
+        if pii_types.iter().any(|t| SECRET_TYPES.contains(&t.as_str())) {
+            return DetectVerdict::Block {
+                pii_types,
+                risk_score,
+                severity: "critical".to_owned(),
+                spans: redact_spans,
+            };
+        }
+
         // High-risk with confirmed pattern matches
         if risk_score >= RISK_BLOCK && max_severity == "critical" && !pii_types.is_empty() {
             return DetectVerdict::Block {
