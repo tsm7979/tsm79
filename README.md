@@ -1,6 +1,8 @@
 <div align="center">
 
-# TSM79 — Sovereign AI Control Plane
+<img src="assets/hero.svg" alt="TSM79 — Sovereign AI Control Plane" width="100%" />
+
+<br/><br/>
 
 **SOVEREIGN. CONTROL. GOVERN.**
 
@@ -9,21 +11,20 @@ PII detected. Secrets blocked. Policy enforced. Audit tamper-evident. By design.
 
 <br/>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/tsm7979/tsm79/ci.yml?branch=main&label=CI&style=for-the-badge&labelColor=000&color=c7f23e)](https://github.com/tsm7979/tsm79/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-c7f23e?style=for-the-badge&labelColor=000)](LICENSE)
-[![Release](https://img.shields.io/github/v/tag/tsm7979/tsm79?label=release&style=for-the-badge&labelColor=000&color=c7f23e)](https://github.com/tsm7979/tsm79/releases)
+[![Version](https://img.shields.io/badge/version-3.1.0-c7f23e?style=for-the-badge&labelColor=000)](CHANGELOG.md)
+[![Languages](https://img.shields.io/badge/polyglot-8%20languages-c7f23e?style=for-the-badge&labelColor=000)](#the-stack)
 [![Live](https://img.shields.io/badge/live-thesovereignmechanica.ai-c7f23e?style=for-the-badge&labelColor=000)](https://www.thesovereignmechanica.ai/)
 
-[![Stars](https://img.shields.io/github/stars/tsm7979/tsm79?style=flat-square&labelColor=000&color=c7f23e)](https://github.com/tsm7979/tsm79/stargazers)
-[![Discussions](https://img.shields.io/github/discussions/tsm7979/tsm79?style=flat-square&labelColor=000&color=c7f23e)](https://github.com/tsm7979/tsm79/discussions)
-[![Last commit](https://img.shields.io/github/last-commit/tsm7979/tsm79/main?style=flat-square&labelColor=000&color=c7f23e)](https://github.com/tsm7979/tsm79/commits/main)
-[![Dataplane: 237 tests](https://img.shields.io/badge/dataplane-237%20tests%20%E2%9C%93-c7f23e?style=flat-square&labelColor=000)](dataplane/)
+[![Python core: tests passing](https://img.shields.io/badge/python%20core-305%20passing-c7f23e?style=flat-square&labelColor=000)](benchmark/)
+[![Benchmark: reproducible](https://img.shields.io/badge/benchmark-reproducible-c7f23e?style=flat-square&labelColor=000)](benchmark/RESULTS.md)
 [![Sovereign overlay](https://img.shields.io/badge/sovereign%20overlay-.tsm%20namespace-c7f23e?style=flat-square&labelColor=000)](docs/OVERLAY.md)
+[![Secure by default](https://img.shields.io/badge/CORS-secure%20default-c7f23e?style=flat-square&labelColor=000)](SECURITY.md)
 [![Code of Conduct](https://img.shields.io/badge/contributor%20covenant-2.1-c7f23e?style=flat-square&labelColor=000)](CODE_OF_CONDUCT.md)
 
 <br/>
 
-[**Live demo**](https://www.thesovereignmechanica.ai/) · [**Architecture**](ARCHITECTURE.md) · [**Sovereign overlay**](docs/OVERLAY.md) · [**Deploy**](docs/DEPLOY.md) · [**SDK**](docs/SDK.md) · [**Policy DSL**](docs/POLICY.md) · [**Threat model**](docs/THREAT_MODEL.md)
+[**Live demo**](https://www.thesovereignmechanica.ai/) · [**Architecture**](ARCHITECTURE.md) · [**Sovereign overlay**](docs/OVERLAY.md) · [**Deploy**](docs/DEPLOY.md) · [**SDK**](docs/SDK.md) · [**Policy DSL**](docs/POLICY.md) · [**Benchmark**](benchmark/RESULTS.md)
 
 </div>
 
@@ -136,6 +137,12 @@ See [docs/DEPLOY.md](docs/DEPLOY.md) for production deployment (mTLS, secret rot
 
 Eleven services, eight languages. Each layer in the language that earns its place.
 
+<div align="center">
+
+<img src="assets/architecture.svg" alt="TSM79 request-path architecture: Rust dataplane on the hot path with detector, edge, overlay-node escalation and Postgres/ClickHouse/Prometheus persistence" width="100%" />
+
+</div>
+
 | Component | Language | Purpose |
 |---|---|---|
 | **`dataplane/`** | **Rust** | The inline AI firewall — h1/h2/hpack, TLS+mTLS, connection pool, rate limit, detection, policy, overlay, audit |
@@ -175,7 +182,7 @@ An ICANN-free namespace that rides on top of the existing internet — Tor / IPF
 
 ```
 .
-├── dataplane/         Rust — the inline AI firewall (237 tests)
+├── dataplane/         Rust — the inline AI firewall (build WIP, #36)
 ├── detector/          Python — ML detector (gRPC + HTTP), NER escalation
 ├── control-plane/     Go — config + workspace + key store
 ├── threat-intel/      Go — IP reputation feeds

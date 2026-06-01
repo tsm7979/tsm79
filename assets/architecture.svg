@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" role="img" aria-label="TSM79 architecture — Rust dataplane on the hot path; detector, policy, overlay, audit around it">
+  <defs>
+    <style>
+      .h    { font-family: 'Helvetica Neue', Arial, sans-serif; font-weight: 700; }
+      .mono { font-family: 'SF Mono','Consolas','Roboto Mono', ui-monospace, monospace; }
+    </style>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5B6068"/>
+    </marker>
+    <marker id="arrLime" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#C7F23E"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#0A0B0D"/>
+
+  <!-- title -->
+  <text class="mono" x="48" y="56" font-size="13" letter-spacing="3" fill="#8A8F98">// TSM79 — REQUEST PATH ARCHITECTURE</text>
+  <rect x="48" y="70" width="60" height="4" fill="#C7F23E"/>
+
+  <!-- CLIENT -->
+  <g>
+    <rect x="48" y="120" width="220" height="92" fill="#101216" stroke="#23262C"/>
+    <text class="h" x="68" y="158" font-size="18" fill="#ECEEEA">Client</text>
+    <text class="mono" x="68" y="182" font-size="12" fill="#8A8F98">SDK · curl · app</text>
+    <text class="mono" x="68" y="200" font-size="12" fill="#8A8F98">OpenAI-compatible HTTP</text>
+  </g>
+
+  <!-- DATAPLANE (hot path, lime framed) -->
+  <g>
+    <rect x="360" y="96" width="560" height="160" fill="#0E1410" stroke="#C7F23E" stroke-width="2"/>
+    <text class="h" x="384" y="134" font-size="22" fill="#ECEEEA">dataplane</text>
+    <text class="mono" x="384" y="156" font-size="12" letter-spacing="1" fill="#C7F23E">RUST · THE ONLY COMPONENT ON THE HOT PATH</text>
+    <!-- inline stages -->
+    <g class="mono" font-size="12" fill="#B9BEC6">
+      <rect x="384" y="178" width="116" height="52" fill="#141A15" stroke="#2C3A24"/>
+      <text x="396" y="200">detect</text><text x="396" y="218" fill="#6E7682">regex·entropy</text>
+      <rect x="510" y="178" width="116" height="52" fill="#141A15" stroke="#2C3A24"/>
+      <text x="522" y="200">policy</text><text x="522" y="218" fill="#6E7682">5 verdicts</text>
+      <rect x="636" y="178" width="116" height="52" fill="#141A15" stroke="#2C3A24"/>
+      <text x="648" y="200">overlay</text><text x="648" y="218" fill="#6E7682">.tsm gateway</text>
+      <rect x="762" y="178" width="134" height="52" fill="#141A15" stroke="#2C3A24"/>
+      <text x="774" y="200">audit</text><text x="774" y="218" fill="#6E7682">Merkle chain</text>
+    </g>
+  </g>
+
+  <!-- UPSTREAM -->
+  <g>
+    <rect x="1012" y="120" width="220" height="92" fill="#101216" stroke="#23262C"/>
+    <text class="h" x="1032" y="158" font-size="18" fill="#ECEEEA">Upstream LLM</text>
+    <text class="mono" x="1032" y="182" font-size="12" fill="#8A8F98">OpenAI · Anthropic</text>
+    <text class="mono" x="1032" y="200" font-size="12" fill="#8A8F98">Ollama · local</text>
+  </g>
+
+  <!-- client -> dataplane -> upstream (hot path, lime) -->
+  <line x1="268" y1="166" x2="354" y2="166" stroke="#C7F23E" stroke-width="2" marker-end="url(#arrLime)"/>
+  <line x1="920" y1="166" x2="1006" y2="166" stroke="#C7F23E" stroke-width="2" marker-end="url(#arrLime)"/>
+
+  <!-- escalation / sidecar layer -->
+  <text class="mono" x="48" y="320" font-size="13" letter-spacing="3" fill="#8A8F98">// ESCALATION + CONTROL — async, off the hot path</text>
+  <rect x="48" y="334" width="60" height="3" fill="#3A3E45"/>
+
+  <g class="mono" font-size="13">
+    <!-- detector -->
+    <rect x="360" y="360" width="170" height="96" fill="#101216" stroke="#23262C"/>
+    <text class="h" x="380" y="396" font-size="16" fill="#ECEEEA">detector</text>
+    <text x="380" y="420" fill="#8A8F98">Python · ML</text>
+    <text x="380" y="438" fill="#6E7682">NER · gRPC</text>
+
+    <!-- edge -->
+    <rect x="550" y="360" width="170" height="96" fill="#101216" stroke="#23262C"/>
+    <text class="h" x="570" y="396" font-size="16" fill="#ECEEEA">edge</text>
+    <text x="570" y="420" fill="#8A8F98">C++ · wasmtime</text>
+    <text x="570" y="438" fill="#6E7682">policy-as-code</text>
+
+    <!-- overlay-node -->
+    <rect x="740" y="360" width="170" height="96" fill="#101216" stroke="#23262C"/>
+    <text class="h" x="760" y="396" font-size="16" fill="#ECEEEA">overlay-node</text>
+    <text x="760" y="420" fill="#8A8F98">Go · libp2p</text>
+    <text x="760" y="438" fill="#6E7682">Kademlia DHT</text>
+  </g>
+
+  <!-- dataplane down-arrows to escalation -->
+  <g stroke="#5B6068" stroke-width="1.5">
+    <line x1="445" y1="256" x2="445" y2="354" marker-end="url(#arr)"/>
+    <line x1="635" y1="256" x2="635" y2="354" marker-end="url(#arr)"/>
+    <line x1="825" y1="256" x2="825" y2="354" marker-end="url(#arr)"/>
+  </g>
+  <text class="mono" x="452" y="300" font-size="11" fill="#6E7682">gRPC (uncertain only)</text>
+
+  <!-- persistence row -->
+  <g class="mono" font-size="13">
+    <rect x="360" y="500" width="170" height="86" fill="#0C0D10" stroke="#1B1E23"/>
+    <text class="h" x="380" y="534" font-size="15" fill="#B9BEC6">Postgres</text>
+    <text x="380" y="558" fill="#6E7682">audit ledger</text>
+
+    <rect x="550" y="500" width="170" height="86" fill="#0C0D10" stroke="#1B1E23"/>
+    <text class="h" x="570" y="534" font-size="15" fill="#B9BEC6">ClickHouse</text>
+    <text x="570" y="558" fill="#6E7682">analytics</text>
+
+    <rect x="740" y="500" width="170" height="86" fill="#0C0D10" stroke="#1B1E23"/>
+    <text class="h" x="760" y="534" font-size="15" fill="#B9BEC6">Prometheus</text>
+    <text x="760" y="558" fill="#6E7682">metrics</text>
+  </g>
+
+  <!-- companions caption -->
+  <text class="mono" x="960" y="396" font-size="12" fill="#8A8F98">companions</text>
+  <text class="mono" x="960" y="418" font-size="12" fill="#6E7682">admin-api · Java</text>
+  <text class="mono" x="960" y="436" font-size="12" fill="#6E7682">policy-lsp · C#</text>
+  <text class="mono" x="960" y="454" font-size="12" fill="#6E7682">control-plane · Go</text>
+  <text class="mono" x="960" y="472" font-size="12" fill="#6E7682">ebpf-loader · Rust/C</text>
+
+  <!-- footer law -->
+  <text class="mono" x="48" y="648" font-size="13" fill="#8A8F98">Fail-closed by design: if the guard can't decide, the request does not pass.</text>
+  <text class="mono" x="48" y="672" font-size="12" fill="#5B6068">The dataplane is on the wire, not beside it — bypass means routing around your own infrastructure.</text>
+
+  <!-- corner ticks -->
+  <g stroke="#C7F23E" stroke-width="2" fill="none">
+    <path d="M28 44 L28 28 L44 28"/>
+    <path d="M1252 28 L1252 28"/>
+    <path d="M28 692 L28 692"/>
+  </g>
+</svg>

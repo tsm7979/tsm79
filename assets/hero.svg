@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img" aria-label="TSM79 — Sovereign AI Control Plane">
+  <defs>
+    <style>
+      .wm   { font-family: 'Helvetica Neue', Arial, sans-serif; font-weight: 800; }
+      .mono { font-family: 'SF Mono', 'Consolas', 'Roboto Mono', ui-monospace, monospace; }
+    </style>
+  </defs>
+
+  <!-- canvas -->
+  <rect x="0" y="0" width="1280" height="440" fill="#0A0B0D"/>
+
+  <!-- faint baseline grid (hairline, square grammar) -->
+  <g stroke="#15171B" stroke-width="1">
+    <line x1="0" y1="110" x2="1280" y2="110"/>
+    <line x1="0" y1="330" x2="1280" y2="330"/>
+    <line x1="320" y1="0" x2="320" y2="440"/>
+    <line x1="960" y1="0" x2="960" y2="440"/>
+  </g>
+
+  <!-- instrument frame -->
+  <rect x="28" y="28" width="1224" height="384" fill="none" stroke="#23262C" stroke-width="1"/>
+
+  <!-- corner registration ticks (lime) -->
+  <g stroke="#C7F23E" stroke-width="2" fill="none">
+    <path d="M28 50 L28 28 L50 28"/>
+    <path d="M1230 28 L1252 28 L1252 50"/>
+    <path d="M28 390 L28 412 L50 412"/>
+    <path d="M1230 412 L1252 412 L1252 390"/>
+  </g>
+
+  <!-- micro labels -->
+  <text class="mono" x="56" y="64" font-size="13" letter-spacing="3" fill="#8A8F98">// THE SOVEREIGN MECHANICA</text>
+  <text class="mono" x="1224" y="64" font-size="13" letter-spacing="2" fill="#8A8F98" text-anchor="end">v3.1.0 · MIT · INLINE AI FIREWALL</text>
+
+  <!-- wordmark -->
+  <text class="wm" x="56" y="232" font-size="150" letter-spacing="-5" fill="#ECEEEA">TSM79</text>
+  <!-- signal block accent -->
+  <rect x="60" y="252" width="430" height="6" fill="#C7F23E"/>
+
+  <!-- tagline -->
+  <text class="mono" x="60" y="298" font-size="24" letter-spacing="8" fill="#C7F23E">SOVEREIGN AI CONTROL PLANE</text>
+
+  <!-- descriptor -->
+  <text class="mono" x="60" y="330" font-size="15" letter-spacing="1" fill="#8A8F98">Every prompt evaluated before it leaves the perimeter — PII detected, secrets blocked, policy enforced, audit tamper-evident.</text>
+
+  <!-- verdict rail -->
+  <text class="mono" x="60" y="384" font-size="15" letter-spacing="2">
+    <tspan fill="#5B6068">VERDICT&#160;&#160;</tspan><tspan fill="#ECEEEA">allow</tspan><tspan fill="#3A3E45">&#160;·&#160;</tspan><tspan fill="#ECEEEA">redact</tspan><tspan fill="#3A3E45">&#160;·&#160;</tspan><tspan fill="#ECEEEA">route_local</tspan><tspan fill="#3A3E45">&#160;·&#160;</tspan><tspan fill="#ECEEEA">quarantine</tspan><tspan fill="#3A3E45">&#160;·&#160;</tspan><tspan fill="#C7F23E">block</tspan>
+  </text>
+</svg>
