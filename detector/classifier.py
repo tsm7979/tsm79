@@ -224,9 +224,57 @@ class Classifier:
                 placeholder = f"[{name}]"
                 redacted = redacted.replace(raw, placeholder, 1)
 
-        # ── Jailbreak ─────────────────────────────────────────────────────────
+        # ── Jailbreak (raw) ───────────────────────────────────────────────────
         if _JAILBREAK.search(text):
             findings.append({"type": "JAILBREAK", "severity": "critical", "context": "prompt injection pattern detected", "redacted": False})
+
+        # ── Anti-evasion sweep ────────────────────────────────────────────────
+        # Re-run jailbreak + secret detection against the NORMALIZED corpus
+        # (homoglyph/leet/zero-width folded + base64/hex decoded) so obfuscated
+        # attacks that dodge the raw pass are still caught. Deterministic, no AI.
+        try:
+            from detector.normalize import normalize, search_corpus
+            norm = normalize(text)
+            corpus = search_corpus(norm)
+            seen = {f["type"] for f in findings}
+            # jailbreak hiding behind obfuscation (check the leet/case fold too)
+            if "JAILBREAK" not in seen and (
+                _JAILBREAK.search(corpus) or _JAILBREAK.search(norm.folded)
+            ):
+                findings.append({
+                    "type": "JAILBREAK", "severity": "critical",
+                    "context": f"obfuscated injection (transforms: {','.join(norm.transforms)})",
+                    "redacted": False,
+                })
+            # secrets surfaced only after decoding base64/hex payloads
+            for name, severity, pattern, validator in _PATTERNS:
+                if name in seen:
+                    continue
+                for seg in norm.decoded_segments:
+                    m = pattern.search(seg)
+                    if not m:
+                        continue
+                    raw = m.group()
+                    if validator and not validator(raw.replace(" ", "").replace("-", "")):
+                        continue
+                    findings.append({
+                        "type": name, "severity": severity,
+                        "context": "secret hidden in encoded payload (decoded by normalizer)",
+                        "redacted": True,
+                    })
+                    seen.add(name)
+                    break
+            # heavy obfuscation is itself a signal
+            if norm.obfuscation_score >= 0.5 and not any(
+                f["type"] == "OBFUSCATION" for f in findings
+            ):
+                findings.append({
+                    "type": "OBFUSCATION", "severity": "medium",
+                    "context": f"evasion machinery detected (score {norm.obfuscation_score:.2f}: {','.join(norm.transforms)})",
+                    "redacted": False,
+                })
+        except Exception:  # normalization must never break the core scan path
+            pass
 
         pii_types = list({f["type"] for f in findings})
         risk, severity = _compute_risk(pii_types, findings)
