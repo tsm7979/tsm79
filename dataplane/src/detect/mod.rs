@@ -6,6 +6,7 @@ pub mod redact;
 pub mod bpe;
 pub mod pipeline;
 pub mod onnx_engine;
+pub mod reputation;
 
 pub use redact::{RedactSpan, redact};
 pub use cvss::{Severity, composite_score, RiskInputs};
@@ -113,6 +114,26 @@ impl Detector {
                         end:      bpe.span_end,
                         pii_type: bpe.technique.to_owned(),
                     }],
+                };
+            }
+        }
+
+        // ── 0a2. Reputation DB (Layer 5): hashed known-bad ───────────────────
+        // Exact + canonical (leet/case-folded) hash match against the seeded
+        // known-bad set. Catches obfuscated replays of known jailbreaks that
+        // the regex set would miss. O(1), deterministic, no AI.
+        {
+            use std::sync::OnceLock;
+            use crate::detect::reputation::ReputationDb;
+            static REP_DB: OnceLock<ReputationDb> = OnceLock::new();
+            let db = REP_DB.get_or_init(ReputationDb::with_seed);
+            let hit = db.check(text);
+            if hit.matched {
+                return DetectVerdict::Block {
+                    pii_types:  vec![format!("KNOWN_BAD:{}", hit.kind)],
+                    risk_score: 96.0,
+                    severity:   "critical".to_owned(),
+                    spans:      Vec::new(),
                 };
             }
         }
