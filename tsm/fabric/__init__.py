@@ -19,11 +19,14 @@ Everything here is pure standard library — zero runtime dependencies.
 from tsm.fabric.crypto import (
     HmacSigner,
     Signer,
+    b64u_decode,
+    b64u_encode,
     new_secret,
     sha256_hex,
     sign_token,
     verify_token,
 )
+from tsm.fabric.ed25519 import Ed25519Signer, Ed25519Verifier, generate_keypair
 from tsm.fabric.identity import (
     IdentityKind,
     IdentityRegistry,
@@ -50,6 +53,8 @@ parse_policy = parse
 __all__ = [
     # crypto
     "Signer", "HmacSigner", "new_secret", "sign_token", "verify_token", "sha256_hex",
+    "b64u_encode", "b64u_decode",
+    "Ed25519Signer", "Ed25519Verifier", "generate_keypair",
     # identity
     "IdentityKind", "Principal", "SessionInfo", "IdentityRegistry",
     # policy
