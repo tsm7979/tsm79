@@ -1302,6 +1302,77 @@ def cmd_fabric(args: argparse.Namespace) -> int:
     return 0 if result.verdict == "allow" else 2
 
 
+_STATUS_STYLE = {
+    "allowed":     (C.GREEN,   "✅ allowed"),
+    "blocked":     (C.RED,     "⛔ blocked"),
+    "quarantined": (C.YELLOW,  "🧪 quarantined"),
+    "escalated":   (C.MAGENTA, "⏏️  escalated"),
+    "error":       (C.RED,     "⚠ error"),
+}
+
+
+def cmd_ask(args: argparse.Namespace) -> int:
+    """tsm ask "<prompt>" — send a prompt through the gateway (control plane on fabric)."""
+    text = " ".join(args.text)
+    if not text:
+        _err('Usage: tsm ask "<prompt>" [--kind agent --classification secret '
+             '--dest-trust 50 --action destructive]')
+        return 1
+
+    from tsm.fabric import IdentityRegistry, TrustFabric, parse_policy
+    from tsm.gateway import AIRequest, Gateway
+
+    policy = parse_policy(
+        'when data.classification == "secret" then route local\n'
+        'when destination.trust < 80 then block\n'
+        'when action == "destructive" then require_approval\n'
+        'default allow\n'
+    )
+    reg = IdentityRegistry()
+    principal = reg.register(getattr(args, "kind", None) or "agent", display="cli-user")
+
+    def forwarder(req, prompt_to_send, destination):
+        return f"[{destination} model reply] (the model saw {len(prompt_to_send)} chars)"
+
+    gw = Gateway(fabric=TrustFabric(identity=reg, policy=policy), forwarder=forwarder)
+    req = AIRequest(
+        model=getattr(args, "model", None) or "gpt-4",
+        messages=({"role": "user", "content": text},),
+        principal_id=principal.id,
+        metadata={
+            "classification": getattr(args, "classification", None) or "public",
+            "dest_trust": float(getattr(args, "dest_trust", None) or 100.0),
+            "action": getattr(args, "action", None) or "ai.request",
+        },
+    )
+    r = gw.handle(req)
+    ok, n = gw.verify_audit()
+    scol, slabel = _STATUS_STYLE.get(r.status, (C.GRAY, r.status))
+    vcol, _v = _VERDICT_STYLE.get(r.verdict, (C.GRAY, r.verdict))
+    reds = ", ".join(r.redactions) if r.redactions else "none"
+    chain = f"{C.GREEN}✓{C.RESET}" if ok else f"{C.RED}✗{C.RESET}"
+
+    _p()
+    _sep()
+    _p(f"{C.BOLD}{C.CYAN}  🛡️  TSM Gateway{C.RESET}  {C.DIM}control plane on the trust fabric{C.RESET}")
+    _sep()
+    _p(f"  {C.DIM}{text[:70]}{'…' if len(text) > 70 else ''}{C.RESET}")
+    _p()
+    _p(f"  {C.BOLD}Status{C.RESET}     {scol}{C.BOLD}{slabel}{C.RESET}  "
+       f"{C.GRAY}(verdict {vcol}{r.verdict}{C.RESET}{C.GRAY}){C.RESET}")
+    _p(f"  {C.BOLD}Route →{C.RESET}    {C.CYAN}{r.destination}{C.RESET}")
+    _p(f"  {C.BOLD}Redacted{C.RESET}   {reds}")
+    if r.content is not None:
+        _p(f"  {C.BOLD}Response{C.RESET}   {C.DIM}{r.content[:70]}{C.RESET}")
+    else:
+        _p(f"  {C.BOLD}Response{C.RESET}   {C.GRAY}(not forwarded){C.RESET}")
+    _p(f"  {C.BOLD}Attested{C.RESET}   {C.GRAY}{r.attestation_id[:16]}…{C.RESET}  chain {chain} ({n})")
+    _p()
+    _sep()
+    _p()
+    return 0 if r.status == "allowed" else 2
+
+
 def cmd_skills(args: argparse.Namespace) -> int:
     skills_dir = _find_skills_dir()
     sub = getattr(args, "sub", None) or "list"
@@ -1479,6 +1550,15 @@ Common:
     fp.add_argument("--dest-trust", type=float, help="destination trust 0-100 (default 100)")
     fp.add_argument("--action", help="action category, e.g. 'destructive'")
 
+    kp = sub.add_parser("ask", help="Send a prompt through the gateway (control plane on the fabric)")
+    kp.add_argument("text", nargs="+")
+    kp.add_argument("--kind", choices=["human", "agent", "model", "service", "device"],
+                    help="identity kind of the caller (default: agent)")
+    kp.add_argument("--model", help="model name (default: gpt-4)")
+    kp.add_argument("--classification", help="data classification, e.g. 'secret'")
+    kp.add_argument("--dest-trust", type=float, help="destination trust 0-100 (default 100)")
+    kp.add_argument("--action", help="action category, e.g. 'destructive'")
+
     stp = sub.add_parser("start", help="Start the proxy")
     stp.add_argument("--daemon", "-d", action="store_true")
     stp.add_argument("--skill")
@@ -1526,6 +1606,7 @@ def main() -> None:
         "scan":    cmd_scan,
         "trust":   cmd_trust,
         "fabric":  cmd_fabric,
+        "ask":     cmd_ask,
         "start":   cmd_start,
         "stop":    cmd_stop,
         "status":  cmd_status,
