@@ -39,6 +39,9 @@ from tsm.fabric.policy_dsl import (
     parse,
 )
 from tsm.fabric.verification import Attestation, AttestationLog
+from tsm.fabric.routing import Destination, RoutingDecision, RoutingEngine, to_destination
+from tsm.fabric.recovery import Incident, RecoveryEngine, RecoveryStage, Transition
+from tsm.fabric.fabric import FabricResult, TrustFabric
 
 # Friendlier alias for the DSL compiler.
 parse_policy = parse
@@ -53,4 +56,10 @@ __all__ = [
     "PolicyParseError",
     # verification
     "Attestation", "AttestationLog",
+    # routing
+    "RoutingEngine", "RoutingDecision", "Destination", "to_destination",
+    # recovery
+    "RecoveryEngine", "Incident", "RecoveryStage", "Transition",
+    # unified facade
+    "TrustFabric", "FabricResult",
 ]

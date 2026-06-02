@@ -1249,6 +1249,59 @@ def cmd_trust(args: argparse.Namespace) -> int:
     return 0 if d.verdict is Verdict.ALLOW else 2
 
 
+def cmd_fabric(args: argparse.Namespace) -> int:
+    """tsm fabric "<text>" — run the full Trust Fabric pipeline end to end."""
+    text = " ".join(args.text)
+    if not text:
+        _err('Usage: tsm fabric "<text>" [--kind agent --classification secret '
+             '--dest-trust 50 --action destructive]')
+        return 1
+
+    from tsm.fabric import IdentityRegistry, TrustFabric, parse_policy
+
+    policy = parse_policy(
+        'when data.classification == "secret" then route local\n'
+        'when destination.trust < 80 then block\n'
+        'when action == "destructive" then require_approval\n'
+        'default allow\n'
+    )
+    reg = IdentityRegistry()
+    fab = TrustFabric(identity=reg, policy=policy)
+    principal = reg.register(getattr(args, "kind", None) or "agent", display="cli-user")
+    result = fab.handle(
+        payload=text, principal_id=principal.id,
+        action=getattr(args, "action", None) or "ai.request",
+        classification=getattr(args, "classification", None) or "public",
+        dest_trust=float(getattr(args, "dest_trust", None) or 100.0),
+    )
+    ok, n = fab.verify_audit()
+    col, label = _VERDICT_STYLE.get(result.verdict, (C.GRAY, result.verdict))
+    degraded = f"  {C.YELLOW}(fail-safe fallback){C.RESET}" if result.degraded else ""
+    chain = f"{C.GREEN}✓ verified{C.RESET}" if ok else f"{C.RED}✗ FAILED{C.RESET}"
+
+    _p()
+    _sep()
+    _p(f"{C.BOLD}{C.CYAN}  🛡️  TSM Trust Fabric{C.RESET}  "
+       f"{C.DIM}Identity → Policy → Engine → Routing → Verification{C.RESET}")
+    _sep()
+    _p(f"  {C.DIM}{text[:70]}{'…' if len(text) > 70 else ''}{C.RESET}")
+    _p()
+    _p(f"  {C.BOLD}Identity{C.RESET}    {principal.kind.value}  "
+       f"{C.GRAY}{principal.id}{C.RESET}  trust {principal.trust_score:.0f}/100")
+    _p(f"  {C.BOLD}Policy{C.RESET}      {C.DIM}{result.policy_rule or 'default allow'}{C.RESET}")
+    _p(f"  {C.BOLD}Engine{C.RESET}      mode={result.mode}")
+    _p(f"  {C.BOLD}Verdict{C.RESET}     {col}{C.BOLD}{label}{C.RESET}")
+    _p(f"  {C.BOLD}Route →{C.RESET}     {C.CYAN}{result.destination}{C.RESET}{degraded}")
+    _p(f"  {C.BOLD}Attested{C.RESET}    {C.GRAY}{result.attestation_id[:16]}…{C.RESET}  "
+       f"chain {chain} ({n})")
+    _p()
+    _p(f"  {C.GRAY}{result.reason}{C.RESET}")
+    _p()
+    _sep()
+    _p()
+    return 0 if result.verdict == "allow" else 2
+
+
 def cmd_skills(args: argparse.Namespace) -> int:
     skills_dir = _find_skills_dir()
     sub = getattr(args, "sub", None) or "list"
@@ -1418,6 +1471,14 @@ Common:
     tp.add_argument("--strict", action="store_true",
                     help="disable autonomous approvals (require a human for ALLOW)")
 
+    fp = sub.add_parser("fabric", help="Run the full Trust Fabric pipeline (all 5 engines)")
+    fp.add_argument("text", nargs="+")
+    fp.add_argument("--kind", choices=["human", "agent", "model", "service", "device"],
+                    help="identity kind of the caller (default: agent)")
+    fp.add_argument("--classification", help="data classification, e.g. 'secret'")
+    fp.add_argument("--dest-trust", type=float, help="destination trust 0-100 (default 100)")
+    fp.add_argument("--action", help="action category, e.g. 'destructive'")
+
     stp = sub.add_parser("start", help="Start the proxy")
     stp.add_argument("--daemon", "-d", action="store_true")
     stp.add_argument("--skill")
@@ -1464,6 +1525,7 @@ def main() -> None:
         "run":     cmd_run,
         "scan":    cmd_scan,
         "trust":   cmd_trust,
+        "fabric":  cmd_fabric,
         "start":   cmd_start,
         "stop":    cmd_stop,
         "status":  cmd_status,

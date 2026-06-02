@@ -1,6 +1,6 @@
 [project]
 name = "tsm-firewall"
-version = "3.3.0"
+version = "3.4.0"
 description = "The AI Firewall — intercept every AI call, detect PII, redact it, route intelligently"
 authors = [{name = "TSM Team", email = "team@tsm.dev"}]
 readme = "README.md"
