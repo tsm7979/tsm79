@@ -337,6 +337,112 @@ async def anthropic_messages(request: Request):
 
 # ── Core pipeline ─────────────────────────────────────────────────────────────
 
+# ── Trust Fabric integration (opt-in: TSM_FABRIC=1) ───────────────────────────
+# When enabled, the decision is made IN-PROCESS by the trust fabric
+# (Identity → Policy → AI/Code/Human engine → Routing → signed attestation)
+# instead of the remote ML detector service. Returns the same shape as
+# _call_detector, so the forward path below is unchanged. Fail-closed: any error
+# returns None and the caller blocks. Set TSM_FABRIC_DIR to persist the audit
+# chain + identities; TSM_FABRIC_POLICY to load a custom trust-language policy.
+
+_FABRIC_MODE = os.environ.get("TSM_FABRIC", "").lower() in ("1", "true", "yes", "on")
+_FABRIC_SINGLETON = None
+
+
+def _load_fabric_policy():
+    from tsm.fabric import parse_policy
+    policy_path = os.environ.get("TSM_FABRIC_POLICY")
+    if policy_path and os.path.exists(policy_path):
+        try:
+            with open(policy_path, encoding="utf-8") as f:
+                return parse_policy(f.read())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[fabric] policy load failed (%s); using defaults", exc)
+    return parse_policy(
+        'when data.classification == "secret" then route local\n'
+        'when destination.trust < 80 then block\n'
+        'when action == "destructive" then require_approval\n'
+        'default allow\n'
+    )
+
+
+def _fabric():
+    """Process-wide TrustFabric, built lazily. Persistent if TSM_FABRIC_DIR is set."""
+    global _FABRIC_SINGLETON
+    if _FABRIC_SINGLETON is None:
+        from tsm.fabric import (AttestationLog, IdentityRegistry, TrustFabric,
+                                persistent_signer)
+        state_dir = os.environ.get("TSM_FABRIC_DIR")
+        identity = attest = None
+        if state_dir:
+            os.makedirs(state_dir, exist_ok=True)
+            signer = persistent_signer(os.path.join(state_dir, "fabric.key"))
+            identity = IdentityRegistry(signer=signer,
+                                        path=os.path.join(state_dir, "principals.json"))
+            attest = AttestationLog(signer=signer,
+                                    path=os.path.join(state_dir, "attest.jsonl"))
+        _FABRIC_SINGLETON = TrustFabric(identity=identity, policy=_load_fabric_policy(),
+                                        attestations=attest)
+    return _FABRIC_SINGLETON
+
+
+def _fabric_redact_body(body: dict) -> dict:
+    from tsm.detectors.pii import PIIDetector
+    det = PIIDetector()
+    new = dict(body)
+    msgs = body.get("messages")
+    if isinstance(msgs, list):
+        new["messages"] = [
+            {**m, "content": det.redact(m["content"])}
+            if isinstance(m, dict) and isinstance(m.get("content"), str) else m
+            for m in msgs
+        ]
+    if isinstance(body.get("prompt"), str):
+        new["prompt"] = det.redact(body["prompt"])
+    return new
+
+
+def _fabric_decide(body: dict, model: str, org_id: str, request_id: str, *,
+                   classification: str = "public", action: str = "ai.request",
+                   dest_trust: float = 100.0, fabric=None) -> dict | None:
+    """In-process fabric decision in the _call_detector return shape (fail-closed)."""
+    try:
+        from tsm.detectors.pii import PIIDetector
+        from tsm.gateway import AIRequest
+
+        prompt = AIRequest.from_openai(body).prompt_text
+        result = (fabric or _fabric()).handle(
+            payload=prompt, action=action, classification=classification,
+            dest_trust=dest_trust, subject=request_id)
+
+        scan = PIIDetector().scan(prompt)
+        pii_types = list(scan.types)
+        severity = scan.worst_severity.value if scan.worst_severity else "none"
+
+        dest = result.destination
+        if result.verdict in ("block", "escalate") or dest in ("blocked", "human"):
+            proxy_action = "block"          # proxy has no human queue -> deny
+        elif dest in ("local", "quarantine"):
+            proxy_action = "route_local"    # isolate from cloud
+        else:
+            proxy_action = "redact" if pii_types else "allow"
+
+        redacted_body = (_fabric_redact_body(body)
+                         if proxy_action in ("redact", "route_local") else body)
+        return {
+            "action": proxy_action,
+            "redacted_body": redacted_body,
+            "pii_types": pii_types,
+            "risk_score": 0.0,
+            "policy_rule": result.policy_rule or result.reason or f"fabric:{result.verdict}",
+            "severity": severity,
+            "vault_id": None,
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[fabric] decision error: %s", exc)
+        return None
+
+
 async def _handle_ai_request(request: Request, path: str) -> Response:
     # ── 1. Read body (size-limited) ───────────────────────────────────────────
     try:
@@ -358,8 +464,18 @@ async def _handle_ai_request(request: Request, path: str) -> Response:
     org_id     = request.headers.get("x-tsm-org-id", "default")
     request_id = request.headers.get("x-request-id", f"tsm-{int(time.time()*1000)}")
 
-    # ── 2. Call Python ML detector (FAIL CLOSED) ──────────────────────────────
-    detect_result = await _call_detector(body, model, org_id, request_id)
+    # ── 2. Decision (FAIL CLOSED): in-process trust fabric or remote detector ──
+    if _FABRIC_MODE:
+        _cls = request.headers.get("x-tsm-classification", "public")
+        _act = request.headers.get("x-tsm-action", "ai.request")
+        try:
+            _dt = float(request.headers.get("x-tsm-dest-trust", "100") or 100)
+        except ValueError:
+            _dt = 100.0
+        detect_result = _fabric_decide(body, model, org_id, request_id,
+                                       classification=_cls, action=_act, dest_trust=_dt)
+    else:
+        detect_result = await _call_detector(body, model, org_id, request_id)
     if detect_result is None:
         # Detector unreachable — fail closed: block the request
         _stats.detector_errors += 1
