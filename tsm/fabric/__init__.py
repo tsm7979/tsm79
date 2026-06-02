@@ -42,6 +42,7 @@ from tsm.fabric.verification import Attestation, AttestationLog
 from tsm.fabric.routing import Destination, RoutingDecision, RoutingEngine, to_destination
 from tsm.fabric.recovery import Incident, RecoveryEngine, RecoveryStage, Transition
 from tsm.fabric.fabric import FabricResult, TrustFabric
+from tsm.fabric.store import persistent_signer
 
 # Friendlier alias for the DSL compiler.
 parse_policy = parse
@@ -62,4 +63,6 @@ __all__ = [
     "RecoveryEngine", "Incident", "RecoveryStage", "Transition",
     # unified facade
     "TrustFabric", "FabricResult",
+    # persistence
+    "persistent_signer",
 ]

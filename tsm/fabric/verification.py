@@ -64,10 +64,20 @@ def _body(seq, aid, actor, subject, action, decision, policy_rule, reason, ts, p
 class AttestationLog:
     """Append-only, hash-chained, signed attestation log."""
 
-    def __init__(self, signer: Optional[Signer] = None) -> None:
+    def __init__(self, signer: Optional[Signer] = None, path: Optional[str] = None) -> None:
         self._signer = signer or HmacSigner()
         self._entries: List[Attestation] = []
         self._last_hash = _GENESIS
+        self._path = path
+        if path:
+            from tsm.fabric.store import read_jsonl
+            for record in read_jsonl(path):
+                try:
+                    att = Attestation(**record)
+                except TypeError:
+                    continue
+                self._entries.append(att)
+                self._last_hash = att.hash
 
     @property
     def key_id(self) -> str:
@@ -89,6 +99,9 @@ class AttestationLog:
         )
         self._entries.append(att)
         self._last_hash = digest
+        if self._path:
+            from tsm.fabric.store import append_jsonl
+            append_jsonl(self._path, att.as_dict())
         return att
 
     def verify_chain(self) -> Tuple[bool, int]:

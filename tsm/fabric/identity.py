@@ -83,9 +83,28 @@ class IdentityRegistry:
     A single ``Signer`` secures every session; swap in an asymmetric signer for
     third-party-verifiable sessions without touching callers."""
 
-    def __init__(self, signer: Optional[Signer] = None) -> None:
+    def __init__(self, signer: Optional[Signer] = None, path: Optional[str] = None) -> None:
         self._signer = signer or HmacSigner()
         self._principals: Dict[str, Principal] = {}
+        self._path = path
+        if path:
+            from tsm.fabric.store import load_json
+            for pid, pd in (load_json(path, {}) or {}).items():
+                try:
+                    self._principals[pid] = Principal(
+                        id=pd["id"], kind=IdentityKind(pd["kind"]),
+                        display=pd.get("display", ""),
+                        trust_score=float(pd.get("trust_score", 50.0)),
+                        attributes=dict(pd.get("attributes", {})),
+                        created=float(pd.get("created", 0.0)),
+                    )
+                except (KeyError, ValueError, TypeError):
+                    continue
+
+    def _persist(self) -> None:
+        if self._path:
+            from tsm.fabric.store import save_json
+            save_json(self._path, {pid: p.as_dict() for pid, p in self._principals.items()})
 
     @property
     def key_id(self) -> str:
@@ -113,6 +132,7 @@ class IdentityRegistry:
             created=time.time(),
         )
         self._principals[pid] = principal
+        self._persist()
         return principal
 
     def get(self, principal_id: str) -> Optional[Principal]:
@@ -122,6 +142,7 @@ class IdentityRegistry:
         principal = self._principals[principal_id]
         updated = replace(principal, trust_score=_clamp(principal.trust_score + delta))
         self._principals[principal_id] = updated
+        self._persist()
         return updated
 
     # ── sessions ────────────────────────────────────────────────────────────
