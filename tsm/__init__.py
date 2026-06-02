@@ -12,5 +12,5 @@ Intercept every AI call. Detect PII. Redact it. Route intelligently.
     print(r.has_critical)            # True
 """
 
-__version__ = "3.1.0"
+__version__ = "3.2.0"
 __all__ = ["__version__"]

@@ -1181,6 +1181,74 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
 # ─── cmd_skills ────────────────────────────────────────────────
 
+_VERDICT_STYLE = {
+    "block":      (C.RED,     "⛔ BLOCK"),
+    "quarantine": (C.YELLOW,  "🧪 QUARANTINE"),
+    "escalate":   (C.MAGENTA, "⏏️  ESCALATE → human"),
+    "allow":      (C.GREEN,   "✅ ALLOW"),
+    "abstain":    (C.GRAY,    "— abstain"),
+}
+_LAYER_LABEL = {"ai": "AI", "code": "CODE", "human": "HUMAN"}
+
+
+def cmd_trust(args: argparse.Namespace) -> int:
+    """tsm trust "<text>" — run the AI -> Code -> Human triple fail-safe engine."""
+    text = " ".join(args.text)
+    if not text:
+        _err('Usage: tsm trust "<text>"  [--no-ai|--no-code|--human allow|block|escalate|--risk high]')
+        return 1
+
+    from tsm.engine import RiskTier, TrustContext, TrustEngine, Verdict
+    from tsm.engine.adapters import ai_layer, code_layer, human_layer
+
+    code = None if getattr(args, "no_code", False) else code_layer()
+    ai = None if getattr(args, "no_ai", False) else ai_layer()
+    human = None
+    hv = getattr(args, "human", None)
+    if hv:
+        human = human_layer(lambda ctx, v=Verdict(hv): v)
+
+    risk = RiskTier(getattr(args, "risk", None) or "low")
+    engine = TrustEngine(ai=ai, code=code, human=human,
+                         autonomous=not getattr(args, "strict", False))
+    d = engine.decide(TrustContext(payload=text, risk=risk))
+
+    _p()
+    _sep()
+    _p(f"{C.BOLD}{C.CYAN}  🛡️  TSM Trust Engine{C.RESET}  {C.DIM}AI → Code → Human (triple fail-safe){C.RESET}")
+    _sep()
+    _p(f"  {C.DIM}{text[:72]}{'…' if len(text) > 72 else ''}{C.RESET}")
+    _p()
+
+    for r in d.reports:
+        lbl = _LAYER_LABEL.get(r.layer.value, r.layer.value)
+        if r.status.value == "offline":
+            _p(f"  {C.GRAY}{lbl:<6} offline{C.RESET}    {C.DIM}{r.reason}{C.RESET}")
+        else:
+            col, _name = _VERDICT_STYLE.get(r.verdict.value, (C.GRAY, r.verdict.value))
+            tag = "" if r.status.value == "online" else f"{C.GRAY}(degraded){C.RESET} "
+            _p(f"  {C.BOLD}{lbl:<6}{C.RESET} {col}{r.verdict.value:<11}{C.RESET}"
+               f"{C.GRAY}conf {r.confidence:.2f}{C.RESET}  {tag}{C.DIM}{r.reason}{C.RESET}")
+    _p()
+
+    if d.divergences:
+        _p(f"  {C.YELLOW}⚠ divergence{C.RESET}  {C.DIM}{'; '.join(d.divergences)}{C.RESET}")
+        _p()
+
+    col, label = _VERDICT_STYLE.get(d.verdict.value, (C.GRAY, d.verdict.value))
+    autonomy = (f"{C.MAGENTA}autonomous{C.RESET}" if d.autonomous
+                else f"{C.CYAN}human-in-loop{C.RESET}")
+    consensus = f"  {C.GREEN}consensus{C.RESET}" if d.consensus else ""
+    _p(f"  {C.BOLD}Decision{C.RESET}   {col}{C.BOLD}{label}{C.RESET}{consensus}")
+    _p(f"  {C.GRAY}mode{C.RESET} {d.mode.value}   {C.GRAY}risk{C.RESET} {d.risk.value}   "
+       f"{C.GRAY}rule{C.RESET} {d.rule}   {autonomy}")
+    _p(f"  {C.GRAY}{d.explanation}{C.RESET}")
+    _p()
+    _sep()
+    _p()
+    return 0 if d.verdict is Verdict.ALLOW else 2
+
+
 def cmd_skills(args: argparse.Namespace) -> int:
     skills_dir = _find_skills_dir()
     sub = getattr(args, "sub", None) or "list"
@@ -1339,6 +1407,17 @@ Common:
     sp2 = sub.add_parser("scan", help="Scan text for PII instantly")
     sp2.add_argument("text", nargs="+")
 
+    tp = sub.add_parser("trust", help="Run the AI→Code→Human trust engine on text")
+    tp.add_argument("text", nargs="+")
+    tp.add_argument("--no-ai", action="store_true", help="simulate the AI layer offline")
+    tp.add_argument("--no-code", action="store_true", help="simulate the Code layer offline")
+    tp.add_argument("--human", choices=["allow", "block", "quarantine", "escalate"],
+                    help="simulate a human decision in the loop")
+    tp.add_argument("--risk", choices=["low", "medium", "high", "critical"],
+                    help="risk hint for the request (default: low)")
+    tp.add_argument("--strict", action="store_true",
+                    help="disable autonomous approvals (require a human for ALLOW)")
+
     stp = sub.add_parser("start", help="Start the proxy")
     stp.add_argument("--daemon", "-d", action="store_true")
     stp.add_argument("--skill")
@@ -1384,6 +1463,7 @@ def main() -> None:
         "hook":    cmd_hook,
         "run":     cmd_run,
         "scan":    cmd_scan,
+        "trust":   cmd_trust,
         "start":   cmd_start,
         "stop":    cmd_stop,
         "status":  cmd_status,
