@@ -53,7 +53,7 @@ sha2 = "0.10"
 
 # gRPC client for the Python ML detector (feature-gated)
 # When enabled: typed calls replace raw HTTP; supports streaming detect results
-tonic  = { version = "0.11", optional = true }
+tonic  = { version = "0.14", optional = true }
 prost  = { version = "0.12", optional = true }
 tokio  = { version = "1",    optional = true, features = ["rt-multi-thread", "macros"] }
 
