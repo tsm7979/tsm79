@@ -45,7 +45,7 @@ aho-corasick = "1"
 # Uses ring for the underlying crypto (Ed25519 / ECDSA P-256 signing).
 # Required by dataplane/src/tls/ca.rs.
 # x509-parser feature gates CertificateParams::from_ca_cert_pem (load existing CA from disk).
-rcgen = { version = "0.13", features = ["x509-parser"] }
+rcgen = { version = "0.14", features = ["x509-parser"] }
 
 # HMAC-SHA256 for the audit chain — constant-time safe
 hmac = "0.12"
