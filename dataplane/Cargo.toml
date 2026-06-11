@@ -48,7 +48,7 @@ aho-corasick = "1"
 rcgen = { version = "0.13", features = ["x509-parser"] }
 
 # HMAC-SHA256 for the audit chain — constant-time safe
-hmac = "0.12"
+hmac = "0.13"
 sha2 = "0.10"
 
 # gRPC client for the Python ML detector (feature-gated)
